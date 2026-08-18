@@ -10,8 +10,12 @@ Visual Studio Code language support for the [Baron](https://github.com/waitingfo
 A TextMate grammar covering the whole Baron language: mnemonics (NMOS and 65C02),
 directives, labels, scopes, strings (with `""` escapes), `&`/`$` hex and `%` binary
 numbers, lists, ranges (`..` / `..<`), operators, built-in functions, and both `;` and
-`\` comments. Inline `BASIC` … `ENDBASIC` blocks are highlighted as BBC BASIC — line
-numbers, the full BASIC 4 keyword table, `PROC`/`FN` names, strings and `REM` comments.
+`\` comments. Inline `BASIC` … `ENDBASIC` blocks are highlighted as BBC BASIC with the
+ROM tokeniser's real matching rules (generated from baron's `basic.c` table): keywords
+match in ROM table order without needing whitespace (`FORX=1TO10` is `FOR`, `X`, `TO`),
+the conditional-flag veto applies (`COUNT` is a keyword, `COUNTER` a variable), `P.`-style
+abbreviations resolve to the right keyword, `PROC`/`FN` names, `*` commands, `REM`/`DATA`
+raw tails, uppercase-only `&` hex, and line numbers.
 
 ### CMOS-aware opcode colouring ###
 The parser tracks `SECTION` nesting and evaluates the `cmos` attribute (inherited by

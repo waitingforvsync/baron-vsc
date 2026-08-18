@@ -3,23 +3,57 @@
   "name": "Baron",
   "scopeName": "source.baron",
   "patterns": [
-    { "include": "#comments" },
-    { "include": "#basic-block" },
-    { "include": "#strings" },
-    { "include": "#definition-statements" },
-    { "include": "#label-def" },
-    { "include": "#numbers" },
-    { "include": "#directives" },
-    { "include": "#mnemonics-cmos" },
-    { "include": "#mnemonics" },
-    { "include": "#builtin-functions" },
-    { "include": "#constants" },
-    { "include": "#local-label-ref" },
-    { "include": "#section-attrs" },
-    { "include": "#assignment" },
-    { "include": "#word-operators" },
-    { "include": "#registers" },
-    { "include": "#operators" }
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#basic-block"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#definition-statements"
+    },
+    {
+      "include": "#label-def"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#directives"
+    },
+    {
+      "include": "#mnemonics-cmos"
+    },
+    {
+      "include": "#mnemonics"
+    },
+    {
+      "include": "#builtin-functions"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#local-label-ref"
+    },
+    {
+      "include": "#section-attrs"
+    },
+    {
+      "include": "#assignment"
+    },
+    {
+      "include": "#word-operators"
+    },
+    {
+      "include": "#registers"
+    },
+    {
+      "include": "#operators"
+    }
   ],
   "repository": {
     "comments": {
@@ -66,15 +100,23 @@
         {
           "match": "(?<![A-Za-z0-9_)\\]])(\\.)(@)",
           "captures": {
-            "1": { "name": "punctuation.definition.label.baron" },
-            "2": { "name": "constant.language.local-label.baron" }
+            "1": {
+              "name": "punctuation.definition.label.baron"
+            },
+            "2": {
+              "name": "constant.language.local-label.baron"
+            }
           }
         },
         {
           "match": "(?<![A-Za-z0-9_)\\]])(\\.)([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "punctuation.definition.label.baron" },
-            "2": { "name": "entity.name.function.label.baron" }
+            "1": {
+              "name": "punctuation.definition.label.baron"
+            },
+            "2": {
+              "name": "entity.name.function.label.baron"
+            }
           }
         }
       ]
@@ -88,36 +130,56 @@
         {
           "match": "(?i)\\b(macro)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "keyword.control.directive.baron" },
-            "2": { "name": "entity.name.function.macro.baron" }
+            "1": {
+              "name": "keyword.control.directive.baron"
+            },
+            "2": {
+              "name": "entity.name.function.macro.baron"
+            }
           }
         },
         {
           "match": "(?i)\\b(function)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "keyword.control.directive.baron" },
-            "2": { "name": "entity.name.function.baron" }
+            "1": {
+              "name": "keyword.control.directive.baron"
+            },
+            "2": {
+              "name": "entity.name.function.baron"
+            }
           }
         },
         {
           "match": "(?i)\\b(section)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "keyword.control.directive.baron" },
-            "2": { "name": "entity.name.type.section.baron" }
+            "1": {
+              "name": "keyword.control.directive.baron"
+            },
+            "2": {
+              "name": "entity.name.type.section.baron"
+            }
           }
         },
         {
           "match": "(?i)\\b(incsection)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "keyword.control.directive.baron" },
-            "2": { "name": "entity.name.type.section.baron" }
+            "1": {
+              "name": "keyword.control.directive.baron"
+            },
+            "2": {
+              "name": "entity.name.type.section.baron"
+            }
           }
         },
         {
           "match": "(?i)\\b(for)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "keyword.control.directive.baron" },
-            "2": { "name": "variable.other.baron" }
+            "1": {
+              "name": "keyword.control.directive.baron"
+            },
+            "2": {
+              "name": "variable.other.baron"
+            }
           }
         }
       ]
@@ -157,7 +219,9 @@
     "assignment": {
       "match": "(?i)^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?==(?!=))",
       "captures": {
-        "1": { "name": "variable.other.definition.baron" }
+        "1": {
+          "name": "variable.other.definition.baron"
+        }
       }
     },
     "word-operators": {
@@ -167,8 +231,12 @@
     "registers": {
       "match": "(?i)(,)\\s*(x|y)\\b",
       "captures": {
-        "1": { "name": "punctuation.separator.baron" },
-        "2": { "name": "variable.language.register.baron" }
+        "1": {
+          "name": "punctuation.separator.baron"
+        },
+        "2": {
+          "name": "variable.language.register.baron"
+        }
       }
     },
     "operators": {
@@ -187,24 +255,47 @@
       "begin": "(?i)^\\s*(basic)\\s*(?=$|;|\\\\|:)",
       "end": "(?i)^\\s*(endbasic)\\b",
       "beginCaptures": {
-        "1": { "name": "keyword.control.directive.baron" }
+        "1": {
+          "name": "keyword.control.directive.baron"
+        }
       },
       "endCaptures": {
-        "1": { "name": "keyword.control.directive.baron" }
+        "1": {
+          "name": "keyword.control.directive.baron"
+        }
       },
       "contentName": "meta.embedded.block.bbcbasic.baron",
       "patterns": [
-        { "include": "#comments" },
+        {
+          "name": "comment.line.semicolon.baron",
+          "match": "^\\s*;.*$"
+        },
+        {
+          "name": "comment.line.backslash.baron",
+          "match": "^\\s*\\\\.*$"
+        },
+        {
+          "match": "^(\\s*)(\\d+)(\\s*)(\\*.*)$",
+          "captures": {
+            "2": {
+              "name": "constant.numeric.line-number.bbcbasic.baron"
+            },
+            "4": {
+              "name": "keyword.other.star-command.bbcbasic.baron"
+            }
+          }
+        },
+        {
+          "match": "(?<=:)\\s*(\\*.*)$",
+          "captures": {
+            "1": {
+              "name": "keyword.other.star-command.bbcbasic.baron"
+            }
+          }
+        },
         {
           "name": "constant.numeric.line-number.bbcbasic.baron",
           "match": "^\\s*\\d+"
-        },
-        {
-          "match": "(?i)\\b(REM)(.*)$",
-          "captures": {
-            "1": { "name": "keyword.control.bbcbasic.baron" },
-            "2": { "name": "comment.line.rem.bbcbasic.baron" }
-          }
         },
         {
           "name": "string.quoted.double.bbcbasic.baron",
@@ -218,27 +309,65 @@
           ]
         },
         {
-          "match": "(PROC|FN)([A-Za-z0-9_`]*)",
+          "match": "(REM)(.*)$",
           "captures": {
-            "1": { "name": "keyword.control.bbcbasic.baron" },
-            "2": { "name": "entity.name.function.bbcbasic.baron" }
+            "1": {
+              "name": "keyword.control.bbcbasic.baron"
+            },
+            "2": {
+              "name": "comment.line.rem.bbcbasic.baron"
+            }
+          }
+        },
+        {
+          "match": "(DATA|D(?:AT|A)?\\.)(.*)$",
+          "captures": {
+            "1": {
+              "name": "keyword.control.bbcbasic.baron"
+            },
+            "2": {
+              "name": "string.unquoted.data.bbcbasic.baron"
+            }
+          }
+        },
+        {
+          "match": "(PROC|PRO\\.|FN)([A-Za-z0-9_`]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.bbcbasic.baron"
+            },
+            "2": {
+              "name": "entity.name.function.bbcbasic.baron"
+            }
           }
         },
         {
           "name": "keyword.control.bbcbasic.baron",
-          "match": "(ENVELOPE|RENUMBER|ENDPROC|RESTORE|STRING\\$\\(|COLOUR|DELETE|GOSUB|INSTR\\(|LEFT\\$\\(|RETURN|REPEAT|REPORT|RIGHT\\$\\(|ADVAL|CHAIN|CLEAR|CLOSE|COUNT|COLOR|ERROR|FALSE|GCOL|HIMEM|INKEY\\$|INPUT|LOMEM|LOCAL|MID\\$\\(|POINT\\(|PRINT|SOUND|TRACE|UNTIL|WIDTH|AUTO|BGET|BPUT|CALL|CHR\\$|DATA|DRAW|EDIT|ELSE|ERL|EVAL|GET\\$|GOTO|INKEY|LIST|LINE|LOAD|MODE|MOVE|NEXT|OPENIN|OPENOUT|OPENUP|OSCLI|PAGE|PLOT|READ|SAVE|SPC|STEP|STOP|STR\\$|TAB\\(|THEN|TIME|TRUE|VPOS|ABS|ACS|ASC|ASN|ATN|CLG|CLS|COS|DEG|DEF|DIM|DIV|END|EOF|EOR|ERR|EXP|EXT|FOR|GET|INT|LEN|LET|LOG|MOD|NEW|NOT|OFF|OLD|POS|PTR|RAD|RUN|RND|SGN|SIN|SQR|TAN|USR|VAL|VDU|AND|IF|LN|ON|OR|TO)(?![0-9A-Za-z_])"
+          "match": "(?:ENDPRO|ENDPR|REPOR|RETUR|CLEA|CLOS|COUN|ENDP|FALS|HIME|LOME|REPO|RETU|BGE|BPU|CLE|CLO|COU|END|FAL|HIM|LOM|PAG|RET|STO|TIM|TRU|VPO|BG|BP|CL|EN|EO|ER|FA|HI|OL|PA|PT|RE|RN|RU|TI|VP|B|E|H|O|R)\\.(?![0-9A-Za-z_`])"
+        },
+        {
+          "name": "keyword.control.bbcbasic.baron",
+          "match": "(?:ENVELOP|RENUMBE|STRING\\$|ENVELO|OPENOU|RENUMB|RESTOR|RIGHT\\$|STRING|COLOU|DELET|ENVEL|INKEY|INSTR|LEFT\\$|OPENI|OPENO|OPENU|POINT|RENUM|REPEA|RESTO|RIGHT|STRIN|ADVA|CHAI|COLO|DELE|ENVE|ERRO|GOSU|INKE|INPU|INST|LEFT|LOCA|MID\\$|OPEN|OSCL|POIN|PRIN|RENU|REPE|REST|RIGH|SOUN|STRI|TRAC|UNTI|WIDT|ADV|AUT|CAL|CHA|CHR|COL|DAT|DEL|DRA|EDI|ELS|ENV|ERR|EVA|GCO|GET|GOS|GOT|INK|INP|INS|LEF|LIN|LIS|LOA|LOC|MID|MOD|MOV|NEX|OPE|OSC|PLO|POI|PRI|PRO|REA|REN|REP|RES|RIG|SAV|SOU|STE|STR|TAB|THE|TRA|UNT|WID|AB|AC|AD|AN|AS|AT|AU|CA|CH|CO|DA|DE|DI|DR|ED|EL|EV|EX|FO|GC|GE|GO|IN|LE|LI|LO|MI|MO|NE|NO|OF|OP|OS|PL|PO|PR|RA|RI|SA|SG|SI|SO|SP|SQ|ST|TA|TH|TR|UN|US|VA|VD|WI|A|C|D|F|G|I|L|M|N|P|S|T|U|V|W)\\."
+        },
+        {
+          "name": "keyword.control.bbcbasic.baron",
+          "match": "AND|ABS|ACS|ADVAL|ASC|ASN|ATN|AUTO|BGET(?![0-9A-Za-z_`])|BPUT(?![0-9A-Za-z_`])|COLOUR|CALL|CHAIN|CHR\\$|CLEAR(?![0-9A-Za-z_`])|CLOSE(?![0-9A-Za-z_`])|CLG(?![0-9A-Za-z_`])|CLS(?![0-9A-Za-z_`])|COS|COUNT(?![0-9A-Za-z_`])|COLOR|DATA|DEG|DEF|DELETE|DIV|DIM|DRAW|ENDPROC(?![0-9A-Za-z_`])|END(?![0-9A-Za-z_`])|ENVELOPE|ELSE|EVAL|ERL(?![0-9A-Za-z_`])|ERROR|EOF(?![0-9A-Za-z_`])|EOR|ERR(?![0-9A-Za-z_`])|EXP|EXT(?![0-9A-Za-z_`])|EDIT|FOR|FALSE(?![0-9A-Za-z_`])|FN|GOTO|GET\\$|GET|GOSUB|GCOL|HIMEM(?![0-9A-Za-z_`])|INPUT|IF|INKEY\\$|INKEY|INT|INSTR\\(|LIST|LINE|LOAD|LOMEM(?![0-9A-Za-z_`])|LOCAL|LEFT\\$\\(|LEN|LET|LOG|LN|MID\\$\\(|MODE|MOD|MOVE|NEXT|NEW(?![0-9A-Za-z_`])|NOT|OLD(?![0-9A-Za-z_`])|ON|OFF|OR|OPENIN|OPENOUT|OPENUP|OSCLI|PRINT|PAGE(?![0-9A-Za-z_`])|PTR(?![0-9A-Za-z_`])|PI(?![0-9A-Za-z_`])|PLOT|POINT\\(|PROC|POS(?![0-9A-Za-z_`])|RETURN(?![0-9A-Za-z_`])|REPEAT|REPORT(?![0-9A-Za-z_`])|READ|REM|RUN(?![0-9A-Za-z_`])|RAD|RESTORE|RIGHT\\$\\(|RND(?![0-9A-Za-z_`])|RENUMBER|STEP|SAVE|SGN|SIN|SQR|SPC|STR\\$|STRING\\$\\(|SOUND|STOP(?![0-9A-Za-z_`])|TAN|THEN|TO|TAB\\(|TRACE|TIME(?![0-9A-Za-z_`])|TRUE(?![0-9A-Za-z_`])|UNTIL|USR|VDU|VAL|VPOS(?![0-9A-Za-z_`])|WIDTH"
         },
         {
           "name": "constant.numeric.hex.bbcbasic.baron",
-          "match": "&[0-9A-Fa-f]+"
+          "match": "&[0-9A-F]+"
         },
         {
           "name": "constant.numeric.decimal.bbcbasic.baron",
-          "match": "\\b\\d+(\\.\\d+)?([Ee][-+]?\\d+)?"
+          "match": "[0-9][0-9.]*|\\.[0-9.]*"
+        },
+        {
+          "name": "variable.other.bbcbasic.baron",
+          "match": "[A-Za-z_`][A-Za-z0-9_`]*"
         },
         {
           "name": "keyword.operator.bbcbasic.baron",
-          "match": "<=|>=|<>|[-+*/^=<>?!$]"
+          "match": "<=|>=|<>|<<|>>|[-+*/^=<>?!$;]"
         }
       ]
     }
