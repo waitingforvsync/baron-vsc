@@ -1,0 +1,84 @@
+# baron-vsc #
+
+Visual Studio Code language support for the [Baron](https://github.com/waitingforvsync/baron)
+6502 assembler — the spiritual successor to BeebAsm (and to
+[beeb-vsc](https://github.com/simondotm/beeb-vsc), which inspired this extension).
+
+## Features ##
+
+### Syntax highlighting ###
+A TextMate grammar covering the whole Baron language: mnemonics (NMOS and 65C02),
+directives, labels, scopes, strings (with `""` escapes), `&`/`$` hex and `%` binary
+numbers, lists, ranges (`..` / `..<`), operators, built-in functions, and both `;` and
+`\` comments. Inline `BASIC` … `ENDBASIC` blocks are highlighted as BBC BASIC — line
+numbers, the full BASIC 4 keyword table, `PROC`/`FN` names, strings and `REM` comments.
+
+### CMOS-aware opcode colouring ###
+The parser tracks `SECTION` nesting and evaluates the `cmos` attribute (inherited by
+nested sections, exactly as baron does). 65C02-only instructions — the extra mnemonics,
+and the CMOS-only addressing modes such as `LDA (zp)`, `BIT #`, `BIT zp,X`, `INC A` and
+`JMP (abs,X)` — are coloured as ordinary opcodes inside a `cmos = TRUE` section, and as
+**invalid** (red) in plain NMOS context, via semantic tokens.
+
+### Navigation and editing ###
+A TypeScript parser mirroring baron's own (lexer.c / assemble.c / expression.c are the
+reference) understands symbols, labels, named and anonymous scopes, local labels
+(`.@`, `@-`, `@+`), macros (with overloads), functions, sections, `INCLUDE`s, and full
+expressions including multi-line lists, ranges and subscripts. On top of it:
+
+- **Go to definition** (F12) — works on dotted paths (`wipe.nonzero`), macro calls,
+  `INCSECTION` names, `@-`/`@+`, and `INCLUDE`/`INCBIN` file names.
+- **Find all references** (Shift+F12).
+- **Hover** — the defining line, its scope, doc comments above it, and the evaluated
+  value of constant symbols (decimal and hex).
+- **Completion** — keywords, mnemonics, macros at statement start; visible symbols,
+  functions, built-ins in expressions; members after `scope.`; section names after
+  `INCSECTION`; attribute names on `SECTION` lines.
+- **Outline / breadcrumbs** — sections, scopes, labels, macros, functions, symbols.
+
+Scoping follows baron precisely: labels bind in the enclosing scope, a label immediately
+before `{` names the scope (one separator allowed between), anonymous scopes are private,
+`IF` does not scope, `FOR` bodies and macro/function bodies do.
+
+### Building ###
+- **Baron: Assemble** (`Ctrl+Alt+B`) — runs baron on the configured root files with the
+  configured switches. Errors and warnings land in the Problems panel and the *Baron*
+  output channel.
+- **Baron: Assemble with Switches...** (`Ctrl+Alt+Shift+B`) — prompts for the switches
+  first (remembered per workspace).
+- **Baron: Set Root Source Files from Active Editor** — quick way to set
+  `baron.sourceFiles`.
+- A `$baron` problem matcher is contributed for custom tasks.
+
+## Setup ##
+
+In your workspace `.vscode/settings.json`:
+
+```json
+{
+  "baron.executablePath": "/path/to/baron",
+  "baron.sourceFiles": ["boot.6502", "loader.6502", "demo.6502"],
+  "baron.buildArgs": ["--opt", "3", "--title", "STARGLOBE", "-o", "demo.ssd", "-v"]
+}
+```
+
+`baron.sourceFiles` is the root set — the files you would pass on the baron command line.
+Each assembles independently (its own symbol table), and together with their `INCLUDE`
+graphs they define what go-to-definition can see. With no root files configured, the
+active editor's file is used.
+
+`baron.diagnosticsOnSave` (default off) reruns baron on every save. Note baron has no
+check-only mode: a *successful* save-triggered run writes its outputs just like a build.
+
+## Development ##
+
+```
+npm install
+npm run build     # bundle to dist/extension.js
+npm test          # core parser tests (no VS Code needed)
+npm run package   # build the .vsix
+```
+
+Press F5 in VS Code to launch an Extension Development Host. `JOURNAL.md` records the
+verified-against-baron-source behaviour notes; when the language and the docs disagree,
+the baron C source is the authority.

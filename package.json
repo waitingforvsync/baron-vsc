@@ -1,0 +1,170 @@
+{
+  "name": "baron-vsc",
+  "displayName": "Baron Assembler",
+  "description": "Language support for the Baron 6502 assembler: syntax highlighting (including inline BBC BASIC), go to definition, completion, hover, outline, references, and build integration.",
+  "version": "0.1.0",
+  "publisher": "waitingforvsync",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/waitingforvsync/baron-vsc.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "6502",
+    "assembler",
+    "baron",
+    "bbc micro",
+    "beebasm"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "languages": [
+      {
+        "id": "baron",
+        "aliases": [
+          "Baron",
+          "baron"
+        ],
+        "extensions": [
+          ".6502"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "baron",
+        "scopeName": "source.baron",
+        "path": "./syntaxes/baron.tmLanguage.json"
+      }
+    ],
+    "semanticTokenTypes": [
+      {
+        "id": "mnemonicCmos",
+        "superType": "keyword",
+        "description": "A 65C02-only mnemonic or addressing mode, in a section with cmos enabled"
+      },
+      {
+        "id": "mnemonicInvalid",
+        "superType": "keyword",
+        "description": "A 65C02-only mnemonic or addressing mode, outside any cmos section"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "baron",
+        "scopes": {
+          "mnemonicCmos": [
+            "keyword.other.mnemonic.cmos.baron",
+            "keyword.other.mnemonic.baron"
+          ],
+          "mnemonicInvalid": [
+            "invalid.illegal.mnemonic.baron"
+          ]
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "baron.build",
+        "title": "Baron: Assemble"
+      },
+      {
+        "command": "baron.buildWithArgs",
+        "title": "Baron: Assemble with Switches..."
+      },
+      {
+        "command": "baron.setRootFiles",
+        "title": "Baron: Set Root Source Files from Active Editor"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "baron.build",
+        "key": "ctrl+alt+b",
+        "mac": "cmd+alt+b",
+        "when": "editorLangId == baron || baron.hasRootFiles"
+      },
+      {
+        "command": "baron.buildWithArgs",
+        "key": "ctrl+alt+shift+b",
+        "mac": "cmd+alt+shift+b",
+        "when": "editorLangId == baron || baron.hasRootFiles"
+      }
+    ],
+    "configuration": {
+      "title": "Baron",
+      "properties": {
+        "baron.executablePath": {
+          "type": "string",
+          "default": "baron",
+          "description": "Path to the baron executable. A bare name is looked up on PATH."
+        },
+        "baron.sourceFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "The root source files passed to baron on the command line, relative to the workspace folder. These also define the include graph used for go-to-definition. If empty, the active editor's file is used.",
+          "scope": "resource"
+        },
+        "baron.buildArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra command line switches passed to baron before the source files, e.g. [\"-o\", \"demo.ssd\", \"--opt\", \"3\", \"--title\", \"DEMO\"].",
+          "scope": "resource"
+        },
+        "baron.diagnosticsOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run baron whenever a Baron file is saved and show its errors in the Problems panel. Note that a successful run writes baron's output files, exactly as a normal build does.",
+          "scope": "resource"
+        }
+      }
+    },
+    "problemMatchers": [
+      {
+        "name": "baron",
+        "owner": "baron",
+        "fileLocation": [
+          "relative",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(.+?):(\\d+):(\\d+):\\s+(error|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node esbuild.mjs --test && node --test out/test/parser.test.cjs",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}

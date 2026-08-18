@@ -1,0 +1,246 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Baron",
+  "scopeName": "source.baron",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#basic-block" },
+    { "include": "#strings" },
+    { "include": "#definition-statements" },
+    { "include": "#label-def" },
+    { "include": "#numbers" },
+    { "include": "#directives" },
+    { "include": "#mnemonics-cmos" },
+    { "include": "#mnemonics" },
+    { "include": "#builtin-functions" },
+    { "include": "#constants" },
+    { "include": "#local-label-ref" },
+    { "include": "#section-attrs" },
+    { "include": "#assignment" },
+    { "include": "#word-operators" },
+    { "include": "#registers" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.semicolon.baron",
+          "match": ";.*$"
+        },
+        {
+          "name": "comment.line.backslash.baron",
+          "match": "\\\\.*$"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.baron",
+      "begin": "\"",
+      "end": "\"(?!\")",
+      "patterns": [
+        {
+          "name": "constant.character.escape.baron",
+          "match": "\"\""
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.baron",
+          "match": "[&$][0-9A-Fa-f]+\\b"
+        },
+        {
+          "name": "constant.numeric.binary.baron",
+          "match": "%[01]+\\b"
+        },
+        {
+          "name": "constant.numeric.decimal.baron",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        }
+      ]
+    },
+    "label-def": {
+      "patterns": [
+        {
+          "match": "(?<![A-Za-z0-9_)\\]])(\\.)(@)",
+          "captures": {
+            "1": { "name": "punctuation.definition.label.baron" },
+            "2": { "name": "constant.language.local-label.baron" }
+          }
+        },
+        {
+          "match": "(?<![A-Za-z0-9_)\\]])(\\.)([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "punctuation.definition.label.baron" },
+            "2": { "name": "entity.name.function.label.baron" }
+          }
+        }
+      ]
+    },
+    "local-label-ref": {
+      "name": "constant.language.local-label.baron",
+      "match": "@[+-]"
+    },
+    "definition-statements": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(macro)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.control.directive.baron" },
+            "2": { "name": "entity.name.function.macro.baron" }
+          }
+        },
+        {
+          "match": "(?i)\\b(function)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.control.directive.baron" },
+            "2": { "name": "entity.name.function.baron" }
+          }
+        },
+        {
+          "match": "(?i)\\b(section)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.control.directive.baron" },
+            "2": { "name": "entity.name.type.section.baron" }
+          }
+        },
+        {
+          "match": "(?i)\\b(incsection)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.control.directive.baron" },
+            "2": { "name": "entity.name.type.section.baron" }
+          }
+        },
+        {
+          "match": "(?i)\\b(for)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.control.directive.baron" },
+            "2": { "name": "variable.other.baron" }
+          }
+        }
+      ]
+    },
+    "directives": {
+      "name": "keyword.control.directive.baron",
+      "match": "(?i)\\b(equb|equs|equw|equd|skipto|skip|align|incbin|include|incsection|section|endsection|if|elif|else|endif|for|next|macro|endmacro|function|print|error|zpreserve|zpauto1|zpauto2|zpauto|unreachable|cancall|canjump|endbasic|basic)\\b"
+    },
+    "mnemonics-cmos": {
+      "name": "keyword.other.mnemonic.cmos.baron",
+      "match": "(?i)\\b(bra|dea|ina|phx|phy|plx|ply|stz|clr|trb|tsb)\\b"
+    },
+    "mnemonics": {
+      "name": "keyword.other.mnemonic.baron",
+      "match": "(?i)\\b(adc|and|asl|bcc|bcs|beq|bit|bmi|bne|bpl|brk|bvc|bvs|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|jmp|jsr|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|rti|rts|sbc|sec|sed|sei|sta|stx|sty|tax|tay|tsx|txa|txs|tya)\\b"
+    },
+    "builtin-functions": {
+      "name": "support.function.baron",
+      "match": "(?i)\\b(lo|hi|abs|int|floor|round|ceil|sqrt|sin|cos|tan|asin|acos|atan|log|ln|exp|not|rnd|len|shape|rank|full|flatten|concat|zip|reverse|sort|sum|product|min|max|defined)\\s*(?=\\()"
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.baron",
+          "match": "(?i)\\b(true|false|pi)\\b"
+        },
+        {
+          "name": "constant.language.pc.baron",
+          "match": "(?i)\\bp%"
+        }
+      ]
+    },
+    "section-attrs": {
+      "match": "(?i)\\b(org|load|exec|filename|cmos|guard)\\s*(?==[^=])",
+      "name": "variable.parameter.attribute.baron"
+    },
+    "assignment": {
+      "match": "(?i)^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?==(?!=))",
+      "captures": {
+        "1": { "name": "variable.other.definition.baron" }
+      }
+    },
+    "word-operators": {
+      "name": "keyword.operator.word.baron",
+      "match": "(?i)\\b(div|mod|or)\\b"
+    },
+    "registers": {
+      "match": "(?i)(,)\\s*(x|y)\\b",
+      "captures": {
+        "1": { "name": "punctuation.separator.baron" },
+        "2": { "name": "variable.language.register.baron" }
+      }
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.range.baron",
+          "match": "\\.\\.<|\\.\\."
+        },
+        {
+          "name": "keyword.operator.baron",
+          "match": "<<|>>|<=|>=|==|!=|<>|[-+*/^=<>#]"
+        }
+      ]
+    },
+    "basic-block": {
+      "begin": "(?i)^\\s*(basic)\\s*(?=$|;|\\\\|:)",
+      "end": "(?i)^\\s*(endbasic)\\b",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.directive.baron" }
+      },
+      "endCaptures": {
+        "1": { "name": "keyword.control.directive.baron" }
+      },
+      "contentName": "meta.embedded.block.bbcbasic.baron",
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "name": "constant.numeric.line-number.bbcbasic.baron",
+          "match": "^\\s*\\d+"
+        },
+        {
+          "match": "(?i)\\b(REM)(.*)$",
+          "captures": {
+            "1": { "name": "keyword.control.bbcbasic.baron" },
+            "2": { "name": "comment.line.rem.bbcbasic.baron" }
+          }
+        },
+        {
+          "name": "string.quoted.double.bbcbasic.baron",
+          "begin": "\"",
+          "end": "\"(?!\")",
+          "patterns": [
+            {
+              "name": "constant.character.escape.baron",
+              "match": "\"\""
+            }
+          ]
+        },
+        {
+          "match": "(PROC|FN)([A-Za-z0-9_`]*)",
+          "captures": {
+            "1": { "name": "keyword.control.bbcbasic.baron" },
+            "2": { "name": "entity.name.function.bbcbasic.baron" }
+          }
+        },
+        {
+          "name": "keyword.control.bbcbasic.baron",
+          "match": "(ENVELOPE|RENUMBER|ENDPROC|RESTORE|STRING\\$\\(|COLOUR|DELETE|GOSUB|INSTR\\(|LEFT\\$\\(|RETURN|REPEAT|REPORT|RIGHT\\$\\(|ADVAL|CHAIN|CLEAR|CLOSE|COUNT|COLOR|ERROR|FALSE|GCOL|HIMEM|INKEY\\$|INPUT|LOMEM|LOCAL|MID\\$\\(|POINT\\(|PRINT|SOUND|TRACE|UNTIL|WIDTH|AUTO|BGET|BPUT|CALL|CHR\\$|DATA|DRAW|EDIT|ELSE|ERL|EVAL|GET\\$|GOTO|INKEY|LIST|LINE|LOAD|MODE|MOVE|NEXT|OPENIN|OPENOUT|OPENUP|OSCLI|PAGE|PLOT|READ|SAVE|SPC|STEP|STOP|STR\\$|TAB\\(|THEN|TIME|TRUE|VPOS|ABS|ACS|ASC|ASN|ATN|CLG|CLS|COS|DEG|DEF|DIM|DIV|END|EOF|EOR|ERR|EXP|EXT|FOR|GET|INT|LEN|LET|LOG|MOD|NEW|NOT|OFF|OLD|POS|PTR|RAD|RUN|RND|SGN|SIN|SQR|TAN|USR|VAL|VDU|AND|IF|LN|ON|OR|TO)(?![0-9A-Za-z_])"
+        },
+        {
+          "name": "constant.numeric.hex.bbcbasic.baron",
+          "match": "&[0-9A-Fa-f]+"
+        },
+        {
+          "name": "constant.numeric.decimal.bbcbasic.baron",
+          "match": "\\b\\d+(\\.\\d+)?([Ee][-+]?\\d+)?"
+        },
+        {
+          "name": "keyword.operator.bbcbasic.baron",
+          "match": "<=|>=|<>|[-+*/^=<>?!$]"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,496 @@
+\ **************************************************************************
+\ *
+\ *		Baron demo
+\ *
+\ *		Spinning star globe
+\ *
+\ *     Build with:
+\ *         baron --opt 3 --title STARGLOBE boot.6502 loader.6502 demo.6502 -o demo.ssd -v -log0 demo.txt
+\ *
+\ *		Change the speed of rotation with Z and X keys.
+\ *		Press Esc to quit.
+\ *
+\ *		Try assembling the code with debugrasters = TRUE (line 20).
+\ *		It shows how the frame is split up into various stages of processing.
+\ *
+\ *		The black part is where we start to plot the dots - starting as soon
+\ *		before the first screenline of the next frame is rastered as possible.
+\ *
+\ *		The red part is a small loop where we wait for 'vsync'. It's not
+\ *		actually vsync, but in fact a fixed time from actual vsync (timed by
+\ *		timer 1) from which point we can start to erase points from the top of
+\ *		the screen down.
+\ *
+\ *		The blue part is the time when we are erasing dots. Because the dots
+\ *		are sorted from top to bottom of screen, we can overlap these updates
+\ *		with the actual screen rasterisation.
+\ *
+\ **************************************************************************
+
+\\ Define globals
+
+numdots			= 180
+radius			= 110
+timerlength		= 64*8*27
+debugrasters	= FALSE
+
+
+\ **************************************************************************
+\ *	multiplication tables
+\ **************************************************************************
+
+; We generate multiplication tables at runtime, based on the well-known
+; "difference of two squares" method:
+;
+;							(a+b)^2  =  a^2 + b^2 + 2ab    (I)
+;							(a-b)^2  =  a^2 + b^2 - 2ab    (II)
+;
+; (I) minus (II) yields:	(a+b)^2 - (a-b)^2 = 4ab
+;
+; 		  or, rewritten:	ab = f(a+b) - f(a-b),
+;											where f(x) = x^2 / 4
+;
+; If we define g(x) = f(255-x), then we can also write:
+;
+;                           f(a-b) = g(255-(a-b))
+;                                  = g((255-a) + b)
+;                                  = g((a EOR 255) + b)
+;
+; So generate f(x) and g(x) for x=0..511 at initialisation, page aligned.
+; Reserve two zp pointers whose high bytes are set to the page of f(x) and g(x) respectively.
+; Then multiply two 8-bit numbers a and b by:
+; 
+;    ; One time set up for multiple multiplications by 'a'
+;    LDA a:STA multabptr            ; a
+;    EOR #255:STA mulnegtabptr      ; a EOR 255
+
+;    LDY b                          ; b
+;    SEC
+;    LDA (multabptr),Y              ; f(a+b)
+;    SBC (mulnegtabptr),Y           ; - g((a EOR 255) + b)
+
+multab          = &3900
+mulnegtab       = &3B00
+
+; these store the screen address of the last dot
+; at the end of the frame, we go through these tables, storing zeroes to
+; all these addresses in order to delete the last frame
+
+olddotaddrlo    = &3D00
+olddotaddrhi    = &3E00
+olddotaddry     = &3F00
+
+screenbase      = &4000
+
+
+\ **************************************************************************
+\ * Define the code section, and global zp allocations
+\ **************************************************************************
+
+SECTION Code, org = &1100, load = &FFFF1100, exec = &FFFF0000+entry, filename = "DEMO"
+
+vsync = &FF
+ZPRESERVE &00..&FC
+ZPAUTO2 multabptr
+ZPAUTO2 mulnegtabptr
+ZPAUTO2 angle
+ZPAUTO2 speed
+
+
+\ ******************************************************************
+\ *	The main loop of the demo
+\ ******************************************************************
+
+.start
+{
+    ZPAUTO1 xpos
+    ZPAUTO1 colour
+    ZPAUTO2 write
+    ZPAUTO1 behindflag
+
+    \\ This is the main loop!
+
+.mainloop
+
+    IF debugrasters
+        LDA #&00 + PAL_black:STA &FE21
+    ENDIF
+
+    \\ Plot every dot on the screen
+
+    LDX #0
+.plotdotloop
+    ; get sin phase
+
+    CLC:LDA dotx,X:ADC angle+1:TAY
+    CLC:ADC #64:STA behindflag
+    LDA sintable,Y:STA multabptr:EOR #255:STA mulnegtabptr
+
+    ; colour is a function of the phase
+
+    LDA coltable,Y:STA colour
+
+    ; multiply radius(y) * sin(phase) to get x position
+
+    CPY #128:LDY dotr,X:BCS negativesine
+    SEC:LDA (multabptr),Y:SBC (mulnegtabptr),Y:JMP positivesine
+    .negativesine
+    LDA (mulnegtabptr),Y:SBC (multabptr),Y
+    .positivesine
+    CLC:ADC #64:STA xpos
+
+    AND #1:ORA colour:TAY:LDA colours,Y:STA colour
+
+    ; routine to plot a dot
+
+    LDA xpos:AND #&FE:ASL A:ASL A:STA write:STA olddotaddrlo,X:PHP
+    LDA doty,X:LSR A:LSR A:AND #&FE
+    PLP:ADC #HI(screenbase):STA write+1:STA olddotaddrhi,X
+    LDA doty,X:AND #7:STA olddotaddry,X:TAY
+
+    LDA colour
+    ORA (write),Y
+    STA (write),Y
+
+    BIT behindflag:BMI behind
+
+    ; if the dot is in front, we double its size
+
+    DEY:BPL @+
+    DEC write+1:DEC write+1:LDY #7:.@
+
+    LDA colour
+    ORA (write),Y
+    STA (write),Y
+    .behind
+
+    ; loop to the next dot
+
+    INX:CPX #numdots
+    BNE plotdotloop
+
+    \\ Wait for VSync here
+
+.waitforvsync
+    IF debugrasters
+        LDA #&00 + PAL_red:STA &FE21
+    ENDIF
+.waitingforvsync
+    LDA vsync:BEQ waitingforvsync
+    CMP #2:BCS exit		; insist that it runs in a frame!
+
+    IF debugrasters
+        LDA #&00 + PAL_blue:STA &FE21
+    ENDIF
+
+    LDA #0:STA vsync
+
+    \\ Now delete all the old dots.
+    \\ We actually do this when the screen is still rasterising down..!
+
+    TAX
+.eraseloop
+    LDY olddotaddrlo,X:STY write
+    LDY olddotaddrhi,X:STY write+1
+    LDY olddotaddry,X
+    STA (write),Y
+    DEY:BPL erasesamerow
+    DEC write+1:DEC write+1:LDY #7:.erasesamerow
+    STA (write),Y
+    INX:CPX #numdots
+    BNE eraseloop
+
+    \\ Add to rotation
+
+    CLC:LDA angle:ADC speed:STA angle
+    LDA angle+1:ADC speed+1:STA angle+1
+
+    \\ Check keypresses
+
+    LDA #66:STA &FE4F:LDA &FE4F:BPL @+
+    CLC:LDA speed:ADC #16:STA speed:BCC @+:INC speed+1:.@
+
+    LDA #97:STA &FE4F:LDA &FE4F:BPL @+
+    SEC:LDA speed:SBC #16:STA speed:BCS @+:DEC speed+1:.@
+
+    LDA #112:STA &FE4F:LDA &FE4F:BMI exit
+
+    JMP mainloop
+}
+
+    \\ Exit - in the least graceful way possible :)
+.exit
+    JMP (&FFFC)
+
+
+
+\ ******************************************************************
+\ *	IRQ handler
+\ ******************************************************************
+
+.irq
+    LDA #&40:STA &FE4D:INC vsync
+    LDA &FC
+    RTI
+
+
+
+\ ******************************************************************
+\ *	Colour table used by the plot code
+\ ******************************************************************
+
+.colours
+    EQUB &00, &00		; black pixels
+    EQUB &02, &01		; blue pixels
+    EQUB &08, &04		; red pixels
+    EQUB &0A, &05		; magenta pixels
+    EQUB &20, &10		; green pixels
+    EQUB &22, &11		; cyan pixels
+    EQUB &28, &14		; yellow pixels
+    EQUB &2A, &15		; white pixels
+
+
+
+
+
+\ ******************************************************************
+\ *	sin table
+\ ******************************************************************
+
+; contains ABS sine values
+; we don't store the sign as it confuses the multiplication.
+; we can tell the sign very easily from whether the index is >128
+
+ALIGN &100	; so we don't incur page-crossed penalties
+.sintable
+    EQUB ABS(SIN((0..255) / 128 * PI)) * 255 + 0.5
+
+
+\ ******************************************************************
+\ *	colour table
+\ ******************************************************************
+
+ALIGN &100
+.coltable
+    EQUB INT((SIN((0..255) / 128 * PI) + 1) / 2.0001 * 7 + 1) * 2
+
+
+\ ******************************************************************
+\ *	dot tables
+\ ******************************************************************
+
+; contains the phase of this dot
+
+ALIGN &100
+.dotx
+    EQUB RND(FULL(numdots, 256))
+
+
+; contains the y position of the dot
+; the dots are sorted by y positions, highest on screen first - this means we can do
+; 'raster chasing'!
+; the y positions are also biased so there are fewer at the poles, and more at the equator!
+
+FUNCTION ball_ypos(n)
+    x = (n - numdots/2 + 0.5) / (numdots/2)
+    y = (x - SIN(x*PI) * 0.1) * radius
+= 128 + y
+
+ALIGN &100
+.doty
+    EQUB ball_ypos(0..numdots-1)
+
+
+; contains the radius of the ball at this y position
+
+FUNCTION ball_radius(n)
+    x = (n - numdots/2 + 0.5) / (numdots/2)
+    y = (x - SIN(x*PI) * 0.1) * radius
+= SQRT(radius*radius - y*y) / 2
+
+ALIGN &100
+.dotr
+    EQUB ball_radius(0..numdots-1)
+
+
+
+\ ******************************************************************
+\ *	The entry point of the demo.
+\ * It is called at the start to initialise the hardware and build the multiplication tables.
+\ * In theory, this could be reused for data after start up.
+\ ******************************************************************
+
+.entry
+{
+    ZPAUTO2 sqr
+    ZPAUTO1 delta
+
+    \\ Set up hardware state and interrupts
+
+    SEI
+    LDX #&FF:TXS                ; reset stack
+    STX &FE44:STX &FE45
+    LDA #&7F:STA &FE4E          ; disable all interrupts
+    STA &FE43                   ; set keyboard data direction
+    LDA #&C0:STA &FE4E          ; enable timer 1 interrupt
+    LDA #&40:STA &FE4B          ; timer 1 free running mode
+    LDA #&00:STA &FE4C          ; default PCR
+    LDA #&0F:STA &FE42          ; set addressable latch for writing
+    LDA #3:STA &FE40            ; keyboard write enable
+
+    \\ Build the multiplication tables
+
+    LDX #0
+    STX sqr:STX sqr+1
+    STX delta
+    STX multabptr
+    STX mulnegtabptr
+    LDA #HI(multab):STA multabptr+1
+    LDA #HI(mulnegtab):STA mulnegtabptr+1
+    
+    \\ Build HI(x^2 DIV 4) table for x=0..511
+
+    LDY #2
+.multableloop
+    LDA sqr+1
+.tabstore STA multab,X  ; operand +2 is self-modified for second page
+    CLC
+    LDA sqr:ADC delta:STA sqr
+    BCC @+:INC sqr+1:.@
+
+    ; step delta on even x
+    TXA:LSR A:BCS @+:INC delta:.@
+
+    INX
+    BNE multableloop
+    INC tabstore+2
+    DEY
+    BNE multableloop
+ 
+    \\ Build HI((255-x)^2 DIV 4) table for x=0..255
+
+    DEY ; X= 0, Y = 255
+.loop2
+    LDA multab,X           ; f(x)   -> g(255-x)
+    STA mulnegtab,Y
+    LDA multab+1,X         ; f(x+1) -> g(256+x)
+    STA mulnegtab+256,X
+    DEY
+    INX
+    BNE loop2
+
+    \\ Clear the screen
+
+    LDX #HI(screenbase)
+    LDA #0
+    TAY
+.clearloop
+    STA screenbase,Y
+    INY
+    BNE clearloop
+    INC clearloop+2
+    DEX
+    BNE clearloop
+
+    \\ Initialise vars
+
+    STA angle:STA angle+1
+    STA vsync
+    STA speed
+    LDA #1:STA speed+1
+
+    \\ Set up CRTC for MODE 2
+
+    LDX #13
+.crtcloop
+    STX &FE00
+    LDA crtcregs,X
+    STA &FE01
+    DEX
+    BPL crtcloop
+
+    \\ Set up video ULA for MODE 2
+
+    LDA #&F4
+    STA &FE20
+
+    \\ Set up palette for MODE 2
+
+    LDX #15
+.palloop
+    LDA paldata,X
+    STA &FE21
+    ORA #&80
+    STA &FE21
+    DEX
+    BPL palloop
+
+    \\ Initialise IRQ
+
+    LDA #2:STA &FE4D
+.synctimer
+    BIT &FE4D:BEQ synctimer
+    STA &FE4D
+
+    LDA #LO(timerlength):STA &FE44
+    LDA #HI(timerlength):STA &FE45
+    LDA #LO(312*64-2):STA &FE46
+    LDA #HI(312*64-2):STA &FE47
+
+    LDA #LO(irq):STA &204
+    LDA #HI(irq):STA &205
+    CLI
+
+    \\ First we wait for 'vsync' so we are synchronised
+
+.initialwait
+    LDA vsync:BEQ initialwait:LDA #0:STA vsync
+    JMP start    
+}
+
+\ ******************************************************************
+\ *	Values of CRTC regs for MODE 2
+\ ******************************************************************
+
+.crtcregs
+    EQUB 127			; R0  horizontal total
+    EQUB 64				; R1  horizontal displayed - shrunk a little
+    EQUB 91				; R2  horizontal position
+    EQUB 40				; R3  sync width
+    EQUB 38				; R4  vertical total
+    EQUB 0				; R5  vertical total adjust
+    EQUB 32				; R6  vertical displayed
+    EQUB 34				; R7  vertical position
+    EQUB 0				; R8  interlace
+    EQUB 7				; R9  scanlines per row
+    EQUB 32				; R10 cursor start
+    EQUB 8				; R11 cursor end
+    EQUB HI(&4000/8)	; R12 screen start address, high
+    EQUB LO(&4000/8)	; R13 screen start address, low
+
+
+\ ******************************************************************
+\ *	Values of palette regs for MODE 2
+\ ******************************************************************
+
+PAL_black	= (0 EOR 7)
+PAL_blue	= (4 EOR 7)
+PAL_red		= (1 EOR 7)
+PAL_magenta = (5 EOR 7)
+PAL_green	= (2 EOR 7)
+PAL_cyan	= (6 EOR 7)
+PAL_yellow	= (3 EOR 7)
+PAL_white	= (7 EOR 7)
+
+.paldata
+    EQUB &00 + PAL_black
+    EQUB &10 + PAL_blue
+    EQUB &20 + PAL_red
+    EQUB &30 + PAL_magenta
+    EQUB &40 + PAL_green
+    EQUB &50 + PAL_cyan
+    EQUB &60 + PAL_yellow
+    EQUB &70 + PAL_white
+
+
+ENDSECTION
