@@ -1,10 +1,13 @@
-# Publish the extension to the VS Code Marketplace when a version tag is pushed:
+# Package the extension and attach it to a GitHub release when a version tag is pushed:
 #
 #   npm version minor          # bumps package.json and creates the vX.Y.Z tag
 #   git push && git push --tags
 #
-# Requires the repository secret VSCE_PAT: an Azure DevOps Personal Access Token with
-# "Marketplace: Manage" scope for the RichTalbot-Watkins publisher.
+# If the repository secret VSCE_PAT exists (an Azure DevOps Personal Access Token with
+# "Marketplace: Manage" scope for the RichTalbot-Watkins publisher), the workflow also
+# publishes to the VS Code Marketplace; without it, publishing is skipped and the .vsix
+# from the GitHub release can be uploaded by hand at
+# https://marketplace.visualstudio.com/manage/publishers/RichTalbot-Watkins
 
 name: release
 
@@ -18,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write   # to attach the .vsix to a GitHub release
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
     steps:
       - uses: actions/checkout@v4
 
@@ -43,9 +48,8 @@ jobs:
         run: npx vsce package
 
       - name: Publish to the VS Code Marketplace
+        if: env.VSCE_PAT != ''
         run: npx vsce publish --packagePath baron-vsc-*.vsix
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
       - name: Attach the .vsix to a GitHub release
         uses: softprops/action-gh-release@v2
