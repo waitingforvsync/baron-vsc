@@ -1,5 +1,7 @@
 .vscode/**
 .claude/**
+.github/**
+tools/**
 JOURNAL.md
 .gitignore
 src/**

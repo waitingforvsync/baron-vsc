@@ -1,0 +1,54 @@
+# Publish the extension to the VS Code Marketplace when a version tag is pushed:
+#
+#   npm version minor          # bumps package.json and creates the vX.Y.Z tag
+#   git push && git push --tags
+#
+# Requires the repository secret VSCE_PAT: an Azure DevOps Personal Access Token with
+# "Marketplace: Manage" scope for the waitingforvsync publisher.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to attach the .vsix to a GitHub release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check the tag matches package.json
+        run: |
+          PKG="$(node -p "require('./package.json').version")"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$PKG" != "$TAG" ]; then
+            echo "package.json version ($PKG) does not match tag ($TAG)" >&2
+            exit 1
+          fi
+
+      - run: npm test
+
+      - name: Package
+        run: npx vsce package
+
+      - name: Publish to the VS Code Marketplace
+        run: npx vsce publish --packagePath baron-vsc-*.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Attach the .vsix to a GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: baron-vsc-*.vsix
+          generate_release_notes: true
