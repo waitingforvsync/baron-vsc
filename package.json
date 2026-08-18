@@ -3,7 +3,7 @@
   "displayName": "Baron Assembler",
   "description": "Language support for the Baron 6502 assembler: syntax highlighting (including inline BBC BASIC), go to definition, completion, hover, outline, references, and build integration.",
   "version": "0.1.0",
-  "publisher": "waitingforvsync",
+  "publisher": "RichTalbot-Watkins",
   "author": {
     "name": "Rich Talbot-Watkins"
   },

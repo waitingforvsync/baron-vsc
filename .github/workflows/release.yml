@@ -4,7 +4,7 @@
 #   git push && git push --tags
 #
 # Requires the repository secret VSCE_PAT: an Azure DevOps Personal Access Token with
-# "Marketplace: Manage" scope for the waitingforvsync publisher.
+# "Marketplace: Manage" scope for the RichTalbot-Watkins publisher.
 
 name: release
 
