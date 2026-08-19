@@ -51,6 +51,78 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.window.showInformationMessage(`Baron: root source files set to ["${rel}"].`);
     }),
 
+    vscode.commands.registerCommand('baron.selectRootFiles', async () => {
+      const folder = activeFolder();
+      if (!folder) {
+        vscode.window.showWarningMessage('Baron: open a workspace folder first.');
+        return;
+      }
+      const config = vscode.workspace.getConfiguration('baron', folder.uri);
+      const current = config.get<string[]>('sourceFiles') ?? [];
+      const uris = await vscode.workspace.findFiles(
+        new vscode.RelativePattern(folder, '**/*.6502'),
+        '**/node_modules/**',
+      );
+      const rels = uris.map((u) => path.relative(folder.uri.fsPath, u.fsPath)).sort();
+      if (rels.length === 0) {
+        vscode.window.showWarningMessage('Baron: no .6502 files found in the workspace.');
+        return;
+      }
+      const items = rels.map((r) => ({ label: r, picked: current.includes(r) }));
+      const picked = await vscode.window.showQuickPick(items, {
+        canPickMany: true,
+        placeHolder: 'The root source files passed to baron (sections land on the disc in this order)',
+      });
+      if (picked === undefined) {
+        return; // cancelled
+      }
+      // Order matters to baron (disc catalogue order), so keep the configured order for
+      // files that stay selected and append newly ticked ones after them.
+      const pickedNames = picked.map((p) => p.label);
+      const kept = current.filter((f) => pickedNames.includes(f));
+      const added = pickedNames.filter((f) => !kept.includes(f));
+      const result = [...kept, ...added];
+      await config.update('sourceFiles', result, vscode.ConfigurationTarget.WorkspaceFolder);
+      updateContextKey();
+      vscode.window.setStatusBarMessage(
+        `Baron: source files set to ${result.join(', ') || '(none)'}`, 5000,
+      );
+    }),
+
+    vscode.commands.registerCommand('baron.setOutputFile', async () => {
+      const folder = activeFolder();
+      if (!folder) {
+        vscode.window.showWarningMessage('Baron: open a workspace folder first.');
+        return;
+      }
+      const config = vscode.workspace.getConfiguration('baron', folder.uri);
+      const current = config.get<string>('outputFile') || '';
+      const value = await vscode.window.showInputBox({
+        prompt: 'Output disc image, relative to the workspace folder (passed to baron as -o). Empty clears it.',
+        value: current || `${path.basename(folder.uri.fsPath)}.ssd`,
+        validateInput: (v) =>
+          v.trim() === '' || /\.ssd$/i.test(v.trim())
+            ? null
+            : 'baron currently only writes .ssd images',
+      });
+      if (value === undefined) {
+        return; // cancelled
+      }
+      const trimmed = value.trim();
+      await config.update('outputFile', trimmed, vscode.ConfigurationTarget.WorkspaceFolder);
+      const buildArgs = config.get<string[]>('buildArgs') ?? [];
+      if (trimmed !== '' && buildArgs.includes('-o')) {
+        vscode.window.showWarningMessage(
+          'Baron: baron.buildArgs already contains -o, which takes precedence over baron.outputFile.',
+        );
+      } else {
+        vscode.window.setStatusBarMessage(
+          trimmed === '' ? 'Baron: output disc image cleared' : `Baron: output disc image set to ${trimmed}`,
+          5000,
+        );
+      }
+    }),
+
     vscode.workspace.onDidSaveTextDocument((doc) => {
       if (doc.languageId !== 'baron') {
         return;
@@ -69,6 +141,17 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   updateContextKey();
+
+  function activeFolder(): vscode.WorkspaceFolder | undefined {
+    const active = vscode.window.activeTextEditor?.document.uri;
+    if (active) {
+      const folder = vscode.workspace.getWorkspaceFolder(active);
+      if (folder) {
+        return folder;
+      }
+    }
+    return vscode.workspace.workspaceFolders?.[0];
+  }
 
   function updateContextKey(): void {
     const hasRoots = (vscode.workspace.workspaceFolders ?? []).some((folder) => {

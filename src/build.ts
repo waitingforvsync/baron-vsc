@@ -34,6 +34,27 @@ export class BaronBuild {
     return vscode.workspace.workspaceFolders?.[0];
   }
 
+  /** The switches actually passed to baron: the given base set, plus "-o <outputFile>"
+   *  from baron.outputFile when the base doesn't already carry a -o of its own. */
+  private effectiveArgs(config: vscode.WorkspaceConfiguration, base: string[]): string[] {
+    const outputFile = config.get<string>('outputFile') ?? '';
+    if (outputFile !== '' && !base.includes('-o')) {
+      return [...base, '-o', outputFile];
+    }
+    return base;
+  }
+
+  /** The disc image a build produces: baron.outputFile, else the -o value in the args. */
+  private discImage(config: vscode.WorkspaceConfiguration): string | undefined {
+    const outputFile = config.get<string>('outputFile') ?? '';
+    const buildArgs = config.get<string[]>('buildArgs') ?? [];
+    const oIndex = buildArgs.indexOf('-o');
+    if (oIndex >= 0 && oIndex + 1 < buildArgs.length) {
+      return buildArgs[oIndex + 1]; // an explicit -o in the switches wins
+    }
+    return outputFile !== '' ? outputFile : undefined;
+  }
+
   /** The root files passed to baron: the configured set, else the active baron file. */
   private sourceFiles(folder: vscode.WorkspaceFolder | undefined): string[] {
     const config = vscode.workspace.getConfiguration('baron', folder?.uri);
@@ -62,7 +83,7 @@ export class BaronBuild {
     if (sources.length === 0) {
       return; // nothing configured and no active baron file: silently do nothing
     }
-    const args = ['--check', ...(config.get<string[]>('buildArgs') ?? []), ...sources];
+    const args = ['--check', ...this.effectiveArgs(config, config.get<string[]>('buildArgs') ?? []), ...sources];
 
     const gen = ++this.generation;
     this.checkProc?.kill(); // supersede any in-flight check
@@ -123,7 +144,7 @@ export class BaronBuild {
       );
       return false;
     }
-    const args = [...(extraArgs ?? config.get<string[]>('buildArgs') ?? []), ...sources];
+    const args = [...this.effectiveArgs(config, extraArgs ?? config.get<string[]>('buildArgs') ?? []), ...sources];
 
     // Save dirty baron documents first, as any build tool expects.
     await vscode.workspace.saveAll(false);
@@ -191,12 +212,10 @@ export class BaronBuild {
     const cwd = folder?.uri.fsPath ?? path.dirname(vscode.window.activeTextEditor?.document.uri.fsPath ?? '.');
     const config = vscode.workspace.getConfiguration('baron', folder?.uri);
 
-    const buildArgs = config.get<string[]>('buildArgs') ?? [];
-    const oIndex = buildArgs.indexOf('-o');
-    const image = oIndex >= 0 && oIndex + 1 < buildArgs.length ? buildArgs[oIndex + 1] : undefined;
+    const image = this.discImage(config);
     if (!image) {
       vscode.window.showWarningMessage(
-        'Baron: no disc image to run. Add "-o", "<image.ssd>" to baron.buildArgs first.',
+        'Baron: no disc image to run. Use "Baron: Set Output Disc Image..." (or add -o to baron.buildArgs).',
       );
       return;
     }

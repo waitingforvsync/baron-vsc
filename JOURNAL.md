@@ -264,6 +264,17 @@ folder; with no placeholder the path is appended, so other emulators configure e
 The previous emulator instance we launched is killed on re-run (one-keypress iterate);
 the process is detached/unref'd so it survives the editor closing.
 
+### Root-file picker and output-image setting ###
+- `baron.selectRootFiles` ("Baron: Select Root Source Files..."): multi-select QuickPick
+  over the workspace's .6502 files → baron.sourceFiles. Order preserved for files that
+  stay selected, new picks appended — order matters because sections land on the disc
+  in collection order.
+- `baron.setOutputFile` ("Baron: Set Output Disc Image..."): sets `baron.outputFile`
+  (validated .ssd; empty clears). Build/check/emulator all go through effectiveArgs():
+  `-o <outputFile>` is appended unless the switches already carry a -o, in which case
+  the explicit -o wins (and the command warns about the shadowing). The emulator's
+  discImage() follows the same precedence.
+
 ### Rebind + docs (Rich's request) ###
 Default keybindings are now F5 = run in emulator, F7 = build, Ctrl+F7 = build with
 switches (retro-IDE style; they shadow VS Code's debug-start/next-diff only in Baron

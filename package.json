@@ -96,6 +96,14 @@
       {
         "command": "baron.setRootFiles",
         "title": "Baron: Set Root Source Files from Active Editor"
+      },
+      {
+        "command": "baron.selectRootFiles",
+        "title": "Baron: Select Root Source Files..."
+      },
+      {
+        "command": "baron.setOutputFile",
+        "title": "Baron: Set Output Disc Image..."
       }
     ],
     "keybindings": [
@@ -140,6 +148,12 @@
           },
           "default": [],
           "description": "Extra command line switches passed to baron before the source files, e.g. [\"-o\", \"demo.ssd\", \"--opt\", \"3\", \"--title\", \"DEMO\"].",
+          "scope": "resource"
+        },
+        "baron.outputFile": {
+          "type": "string",
+          "default": "",
+          "description": "The output disc image (.ssd), relative to the workspace folder. When set, \"-o <outputFile>\" is passed to baron automatically (unless baron.buildArgs already contains -o), and \"Baron: Run in Emulator\" boots this image. Set it with the \"Baron: Set Output Disc Image...\" command.",
           "scope": "resource"
         },
         "baron.emulatorPath": {

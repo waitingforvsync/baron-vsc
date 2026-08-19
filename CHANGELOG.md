@@ -20,6 +20,9 @@
   confuses scope tracking for the rest of the file.
 - **Keybindings**: `F5` run in emulator, `F7` assemble, `Ctrl+F7` assemble with
   switches (previously `Ctrl+Alt+R` / `Ctrl+Alt+B` / `Ctrl+Alt+Shift+B`).
+- **Baron: Select Root Source Files...** — pick the root set from the workspace's
+  `.6502` files; **Baron: Set Output Disc Image...** — sets `baron.outputFile`, passed
+  to baron as `-o` automatically (no `-o` needed in `baron.buildArgs`).
 - The extension icon is now the BBC Micro owl.
 
 ## 0.1.0 (2026-08-18) ##

@@ -58,14 +58,20 @@ before `{` names the scope (one separator allowed between), anonymous scopes are
 - **Baron: Assemble with Switches...** (`Ctrl+F7`) — prompts for the switches
   first (remembered per workspace).
 - **Baron: Run in Emulator** (`F5`) — assembles, then launches the configured
-  emulator with the disc image named by `-o` in `baron.buildArgs`. Defaults suit
+  emulator with the disc image (`baron.outputFile`, or an explicit `-o` in
+  `baron.buildArgs`, which wins if both are set). Defaults suit
   [b2](https://github.com/tom-seddon/b2) (`b2 -b -0 <image>`: boot drive 0); point
   `baron.emulatorPath` at the binary and shape `baron.emulatorArgs` for other emulators —
   `${image}` in an argument is replaced by the image path (appended if absent).
   Re-running kills the previously launched emulator instance, so build-and-try is one
   keypress.
+- **Baron: Select Root Source Files...** — tick the root files from a list of the
+  workspace's `.6502` files (sets `baron.sourceFiles`; the configured order is kept for
+  files that stay selected, since sections land on the disc in file order).
+- **Baron: Set Output Disc Image...** — sets `baron.outputFile`, which is passed to
+  baron as `-o` automatically, so the switches never need one.
 - **Baron: Set Root Source Files from Active Editor** — quick way to set
-  `baron.sourceFiles`.
+  `baron.sourceFiles` to just the current file.
 - A `$baron` problem matcher is contributed for custom tasks.
 
 ## Setup ##
@@ -76,9 +82,13 @@ In your workspace `.vscode/settings.json`:
 {
   "baron.executablePath": "/path/to/baron",
   "baron.sourceFiles": ["boot.6502", "loader.6502", "demo.6502"],
-  "baron.buildArgs": ["--opt", "3", "--title", "STARGLOBE", "-o", "demo.ssd", "-v"]
+  "baron.outputFile": "demo.ssd",
+  "baron.buildArgs": ["--opt", "3", "--title", "STARGLOBE", "-v"]
 }
 ```
+
+(Or use the commands: *Baron: Select Root Source Files...* and *Baron: Set Output Disc
+Image...* write these settings for you.)
 
 `baron.sourceFiles` is the root set — the files you would pass on the baron command line.
 Each assembles independently (its own symbol table), and together with their `INCLUDE`
