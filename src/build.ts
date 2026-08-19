@@ -41,6 +41,13 @@ export class BaronBuild {
     return vscode.workspace.workspaceFolders?.[0];
   }
 
+  /** Resolve a configured executable path against the workspace folder, so a relative
+   *  path keeps working whatever cwd the process is spawned with (the shadow-tree check
+   *  runs in a temp dir). A bare name is left alone for PATH lookup. */
+  private resolveExe(exe: string, wsRoot: string): string {
+    return exe.includes('/') || exe.includes(path.sep) ? path.resolve(wsRoot, exe) : exe;
+  }
+
   /** The switches actually passed to baron: the given base set, plus "-o <outputFile>"
    *  from baron.outputFile when the base doesn't already carry a -o of its own. */
   private effectiveArgs(config: vscode.WorkspaceConfiguration, base: string[]): string[] {
@@ -125,7 +132,7 @@ export class BaronBuild {
     const folder = this.workspaceFolder();
     const wsRoot = folder?.uri.fsPath ?? path.dirname(vscode.window.activeTextEditor?.document.uri.fsPath ?? '.');
     const config = vscode.workspace.getConfiguration('baron', folder?.uri);
-    const exe = config.get<string>('executablePath') || 'baron';
+    const exe = this.resolveExe(config.get<string>('executablePath') || 'baron', wsRoot);
     const sources = this.sourceFiles(folder);
     if (sources.length === 0) {
       return; // nothing configured and no active baron file: silently do nothing
@@ -152,16 +159,18 @@ export class BaronBuild {
     this.checkProc = proc;
 
     const stderrChunks: string[] = [];
+    let launchFailed = false;
     proc.stderr?.on('data', (d: Buffer) => stderrChunks.push(d.toString()));
     proc.stdout?.on('data', () => { /* PRINT output is uninteresting for a check */ });
     proc.on('error', (err) => {
+      launchFailed = true;
       if (gen === this.generation) {
         this.output.appendLine(`baron --check: failed to launch '${exe}': ${err.message}`);
       }
     });
     proc.on('close', (code, signal) => {
-      if (gen !== this.generation || signal) {
-        return; // superseded (or killed): a newer run owns the Problems panel
+      if (gen !== this.generation || signal || launchFailed || code === null) {
+        return; // superseded, killed or never ran: existing diagnostics stand
       }
       this.checkProc = undefined;
       // Diagnostics resolve against the real workspace, never the shadow tree.
@@ -193,7 +202,7 @@ export class BaronBuild {
     const folder = this.workspaceFolder();
     const cwd = folder?.uri.fsPath ?? path.dirname(vscode.window.activeTextEditor?.document.uri.fsPath ?? '.');
     const config = vscode.workspace.getConfiguration('baron', folder?.uri);
-    const exe = config.get<string>('executablePath') || 'baron';
+    const exe = this.resolveExe(config.get<string>('executablePath') || 'baron', cwd);
 
     // baron.buildOverride replaces the whole default invocation (for the plain build
     // only - "Assemble with Switches..." always builds a baron command line, that being
@@ -241,6 +250,11 @@ export class BaronBuild {
         resolve(false);
       });
       proc.on('close', (code) => {
+        if (code === null) {
+          this.running = false; // never ran (or killed): the error handler reported it
+          resolve(false);
+          return;
+        }
         const stdout = chunks.join('');
         const stderr = stderrChunks.join('');
         if (stdout) {
@@ -293,7 +307,7 @@ export class BaronBuild {
       return; // the build already reported its errors
     }
 
-    const emu = config.get<string>('emulatorPath') || 'b2';
+    const emu = this.resolveExe(config.get<string>('emulatorPath') || 'b2', cwd);
     const emuArgs = (config.get<string[]>('emulatorArgs') ?? []).map((a) =>
       a.split('${image}').join(imagePath),
     );
