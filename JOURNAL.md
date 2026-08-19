@@ -263,3 +263,10 @@ substitutes the path named by `-o` in baron.buildArgs, resolved against the work
 folder; with no placeholder the path is appended, so other emulators configure easily.
 The previous emulator instance we launched is killed on re-run (one-keypress iterate);
 the process is detached/unref'd so it survives the editor closing.
+
+### Rebind + docs (Rich's request) ###
+Default keybindings are now F5 = run in emulator, F7 = build, Ctrl+F7 = build with
+switches (retro-IDE style; they shadow VS Code's debug-start/next-diff only in Baron
+contexts via the `when` clause). Rich bumped to 0.1.1 and renamed the display name to
+"Baron BBC Micro Assembler" directly in package.json. README and CHANGELOG brought up
+to date (earlier journal entries keep the old bindings they were written under).

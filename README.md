@@ -52,12 +52,12 @@ before `{` names the scope (one separator allowed between), anonymous scopes are
   runs asynchronously and a newer save kills and supersedes an in-flight one, so slow
   assemblies never block the editor. Requires a baron built with `--check` support;
   also available manually as **Baron: Check**.
-- **Baron: Assemble** (`Ctrl+Alt+B`) — runs baron on the configured root files with the
+- **Baron: Assemble** (`F7`) — runs baron on the configured root files with the
   configured switches. Errors and warnings land in the Problems panel and the *Baron*
   output channel.
-- **Baron: Assemble with Switches...** (`Ctrl+Alt+Shift+B`) — prompts for the switches
+- **Baron: Assemble with Switches...** (`Ctrl+F7`) — prompts for the switches
   first (remembered per workspace).
-- **Baron: Run in Emulator** (`Ctrl+Alt+R`) — assembles, then launches the configured
+- **Baron: Run in Emulator** (`F5`) — assembles, then launches the configured
   emulator with the disc image named by `-o` in `baron.buildArgs`. Defaults suit
   [b2](https://github.com/tom-seddon/b2) (`b2 -b -0 <image>`: boot drive 0); point
   `baron.emulatorPath` at the binary and shape `baron.emulatorArgs` for other emulators —
