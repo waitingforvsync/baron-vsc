@@ -149,9 +149,51 @@ class FileParser {
     return tok.kind === TokKind.Eof || tok.kind === TokKind.Terminator || this.isPunct(tok, '}');
   }
 
+  /** Error recovery: consume to the next separator. The lexer already hides comments,
+   *  strings and char literals, so none of those can fake one. A '{' met while skipping
+   *  is a LIST brace (we are in expression territory, where '{' always opens a list),
+   *  so it is consumed through its balanced close - newlines inside a list are soft.
+   *  A bare '}' is a scope close and stops the skip, as does a terminator or EOF. */
   private skipToStatementEnd(): void {
-    while (!this.atStatementEnd(this.peek())) {
+    for (;;) {
+      const tok = this.peek();
+      if (this.atStatementEnd(tok)) {
+        return;
+      }
       this.next();
+      if (this.isPunct(tok, '{')) {
+        this.recoverList();
+      }
+    }
+  }
+
+  /** Error recovery inside a list literal, entered just past a '{' whose contents went
+   *  wrong: consume through the balanced '}' tracking nesting, treating newline-only
+   *  terminators as whitespace (lists span lines). A hard terminator (one with a ':' in
+   *  it) stops the recovery and is left in place - baron's lexer leaves it for the
+   *  statement loop too, which is how an unclosed list gets reported there. */
+  private recoverList(): void {
+    let depth = 1;
+    for (;;) {
+      const tok = this.peek();
+      if (tok.kind === TokKind.Eof) {
+        return;
+      }
+      if (tok.kind === TokKind.Terminator) {
+        if (!tok.newlineOnly) {
+          return; // hard terminator: the list is unclosed; leave it for the loop
+        }
+        this.next();
+        continue;
+      }
+      this.next();
+      if (this.isPunct(tok, '{')) {
+        depth++;
+      } else if (this.isPunct(tok, '}')) {
+        if (--depth === 0) {
+          return;
+        }
+      }
     }
   }
 
@@ -223,6 +265,7 @@ class FileParser {
         // A function body's top-level return (or a stray '='): parse the expression.
         this.next();
         this.parseExpr();
+        this.skipToStatementEnd();
         this.closeFunctionIfOpen();
         return;
       }
@@ -246,16 +289,19 @@ class FileParser {
     if (MNEMONICS.has(lower)) {
       this.next();
       this.parseInstruction(tok);
+      this.skipToStatementEnd();
       return;
     }
     if (DIRECTIVES.has(lower)) {
       this.next();
       this.parseDirective(tok);
+      this.skipToStatementEnd();
       return;
     }
     if (CLOSERS.has(lower)) {
       this.next();
       this.parseCloser(tok);
+      this.skipToStatementEnd();
       return;
     }
     if (RESERVED_CONSTANTS.has(lower)) {
@@ -273,11 +319,13 @@ class FileParser {
         // A dotted path is not a binding target (baron rejects it); record as a reference.
         this.recordIdentRef(tok, 'value');
         this.parseExpr();
+        this.skipToStatementEnd();
         return;
       }
       const def = this.define('symbol', tok, this.scope);
       const rhsStart = this.lx.getPos();
       def.valueExpr = this.parseExpr() ?? undefined;
+      this.skipToStatementEnd();
       const rhsEnd = this.lx.getPos();
       def.detail = '= ' + this.index.text.slice(rhsStart, Math.min(rhsEnd, rhsStart + 60)).trim();
       // In a function body an assignment is a local; elsewhere it's an ordinary symbol.
@@ -1085,6 +1133,9 @@ class FileParser {
           }
           case '{': {
             // List literal: newline-only terminators are whitespace inside the braces.
+            // Anything unexpected inside recovers through the balanced close, so a
+            // syntax error mid-list never lets the list's tail (or its '}') leak out to
+            // be misread as statements or a scope close.
             this.next();
             for (;;) {
               this.skipSoftNewlines();
@@ -1092,10 +1143,11 @@ class FileParser {
                 this.next();
                 break;
               }
-              if (!this.canStartExpr(this.peek())) {
-                break; // unclosed / hard-terminated list: stop tolerantly
+              const before = this.lx.getPos();
+              if (!this.canStartExpr(this.peek()) || (this.parseExpr(), this.lx.getPos() === before)) {
+                this.recoverList();
+                break;
               }
-              this.parseExpr();
               this.skipSoftNewlines();
               if (this.isPunct(this.peek(), ',')) {
                 this.next();
@@ -1105,6 +1157,7 @@ class FileParser {
                 this.next();
                 break;
               }
+              this.recoverList();
               break;
             }
             return { t: 'opaque' };

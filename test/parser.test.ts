@@ -319,6 +319,69 @@ test('evalConst follows symbols and operators', () => {
   assert.equal(evalConst(c.valueExpr), 52);
 });
 
+// ---- char literals ----
+
+test('char literals lex as numbers and evaluate', () => {
+  const unit = parse("x = 'A' + 1\nEQUB 'z', ':', ';'\n");
+  const x = unit.globalScope.lookupLocal('x')![0];
+  assert.equal(evalConst(x.valueExpr), 66);
+  // The ':' and ';' inside char literals did not terminate or comment the statement.
+  const index = unit.files.get('main.6502')!;
+  assert.equal(index.defs.filter((d) => d.name === 'x').length, 1);
+});
+
+// ---- error recovery ----
+
+test('an error inside a multi-line list never leaks its tail as statements', () => {
+  const src = [
+    '.outer',
+    '{',
+    'table = {',
+    '    1, 2, ?? 3,',           // syntax error mid-list
+    '    {4, 5}, 6,',
+    '}',
+    '.inner',
+    '}',
+    '.after',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  // The list's lines were not misread as statements, its '}' did not close the scope:
+  // inner is still inside outer's scope, after is back at global scope.
+  const inner = index.defs.find((d) => d.name === 'inner')!;
+  const outer = index.defs.find((d) => d.name === 'outer')!;
+  assert.equal(inner.scope, outer.namedScope);
+  const after = index.defs.find((d) => d.name === 'after')!;
+  assert.equal(after.scope, unit.globalScope);
+});
+
+test('a hard terminator inside a broken list stops recovery at the separator', () => {
+  const src = 'bad = { 1, ?? : LDA #1\n.next\n';
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  // The statement after the ':' still parses, and the label lands in global scope.
+  assert.deepEqual(index.mnemonics.map((m) => m.mnemonic), ['lda']);
+  assert.equal(index.defs.find((d) => d.name === 'next')!.scope, unit.globalScope);
+});
+
+test('junk after a statement cannot open a phantom scope', () => {
+  const src = 'EQUB 1 ?? {2, 3}\n.after\nsym = 4\n';
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  assert.equal(unit.globalScope.children.length, 0); // the {2, 3} was skipped as a list
+  assert.equal(index.defs.find((d) => d.name === 'after')!.scope, unit.globalScope);
+  assert.equal(evalConst(unit.globalScope.lookupLocal('sym')![0].valueExpr), 4);
+});
+
+test('recovery keeps later definitions and references intact', () => {
+  const src = 'LDA # # nonsense\nvalid = 42\nSTA valid\n';
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  const ref = index.refs.find((r) => r.parts[0].name === 'valid')!;
+  assert.equal(evalConst(resolveRef(unit, ref, 0)[0].valueExpr), 42);
+});
+
 // ---- BASIC blocks ----
 
 test('basic blocks are opaque', () => {

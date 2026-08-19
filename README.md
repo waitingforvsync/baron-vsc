@@ -44,7 +44,14 @@ Scoping follows baron precisely: labels bind in the enclosing scope, a label imm
 before `{` names the scope (one separator allowed between), anonymous scopes are private,
 `IF` does not scope, `FOR` bodies and macro/function bodies do.
 
-### Building ###
+### Checking and building ###
+- **Check on save** (`baron.checkOnSave`, on by default) — every save runs
+  `baron --check` in the background: a full assembly of the root set (branch range,
+  undefined symbols, expression errors — everything the real assembler knows) that
+  writes no output files. Errors land in the Problems panel as red squiggles. The check
+  runs asynchronously and a newer save kills and supersedes an in-flight one, so slow
+  assemblies never block the editor. Requires a baron built with `--check` support;
+  also available manually as **Baron: Check**.
 - **Baron: Assemble** (`Ctrl+Alt+B`) — runs baron on the configured root files with the
   configured switches. Errors and warnings land in the Problems panel and the *Baron*
   output channel.
@@ -71,8 +78,8 @@ Each assembles independently (its own symbol table), and together with their `IN
 graphs they define what go-to-definition can see. With no root files configured, the
 active editor's file is used.
 
-`baron.diagnosticsOnSave` (default off) reruns baron on every save. Note baron has no
-check-only mode: a *successful* save-triggered run writes its outputs just like a build.
+If baron isn't on your PATH, point `baron.executablePath` at the binary. Set
+`baron.checkOnSave` to `false` to turn off the on-save check.
 
 ## Development ##
 

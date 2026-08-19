@@ -85,6 +85,10 @@
         "title": "Baron: Assemble with Switches..."
       },
       {
+        "command": "baron.check",
+        "title": "Baron: Check (assemble without writing outputs)"
+      },
+      {
         "command": "baron.setRootFiles",
         "title": "Baron: Set Root Source Files from Active Editor"
       }
@@ -129,10 +133,10 @@
           "description": "Extra command line switches passed to baron before the source files, e.g. [\"-o\", \"demo.ssd\", \"--opt\", \"3\", \"--title\", \"DEMO\"].",
           "scope": "resource"
         },
-        "baron.diagnosticsOnSave": {
+        "baron.checkOnSave": {
           "type": "boolean",
-          "default": false,
-          "description": "Run baron whenever a Baron file is saved and show its errors in the Problems panel. Note that a successful run writes baron's output files, exactly as a normal build does.",
+          "default": true,
+          "description": "Run `baron --check` whenever a Baron file is saved and show its errors in the Problems panel. A check run assembles everything but writes no output files. Requires a baron built with --check support.",
           "scope": "resource"
         }
       }

@@ -10,6 +10,10 @@ export class BaronBuild {
   private readonly output: vscode.OutputChannel;
   private readonly diagnostics: vscode.DiagnosticCollection;
   private running = false;
+  /** The in-flight `baron --check` process, if any. */
+  private checkProc: cp.ChildProcess | undefined;
+  /** Generation counter: only the newest check (or build) may publish diagnostics. */
+  private generation = 0;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.output = vscode.window.createOutputChannel('Baron');
@@ -42,11 +46,69 @@ export class BaronBuild {
     return [];
   }
 
+  /** Run `baron --check`: assemble everything, write nothing, refresh the Problems
+   *  panel. Entirely asynchronous - baron runs as a separate process and we only listen
+   *  for its output, so the editor never waits on a slow assembly. If a newer check (or
+   *  a build) starts while one is in flight, the old process is killed and its results
+   *  discarded - the newest run always wins. */
+  runCheck(): void {
+    const folder = this.workspaceFolder();
+    const cwd = folder?.uri.fsPath ?? path.dirname(vscode.window.activeTextEditor?.document.uri.fsPath ?? '.');
+    const config = vscode.workspace.getConfiguration('baron', folder?.uri);
+    const exe = config.get<string>('executablePath') || 'baron';
+    const sources = this.sourceFiles(folder);
+    if (sources.length === 0) {
+      return; // nothing configured and no active baron file: silently do nothing
+    }
+    const args = ['--check', ...(config.get<string[]>('buildArgs') ?? []), ...sources];
+
+    const gen = ++this.generation;
+    this.checkProc?.kill(); // supersede any in-flight check
+    let proc: cp.ChildProcess;
+    try {
+      proc = cp.spawn(exe, args, { cwd });
+    } catch {
+      return;
+    }
+    this.checkProc = proc;
+
+    const stderrChunks: string[] = [];
+    proc.stderr?.on('data', (d: Buffer) => stderrChunks.push(d.toString()));
+    proc.stdout?.on('data', () => { /* PRINT output is uninteresting for a check */ });
+    proc.on('error', (err) => {
+      if (gen === this.generation) {
+        this.output.appendLine(`baron --check: failed to launch '${exe}': ${err.message}`);
+      }
+    });
+    proc.on('close', (code, signal) => {
+      if (gen !== this.generation || signal) {
+        return; // superseded (or killed): a newer run owns the Problems panel
+      }
+      this.checkProc = undefined;
+      const stderr = stderrChunks.join('');
+      if (code !== 0 && /unknown option '--check'/.test(stderr)) {
+        this.output.appendLine(
+          "baron --check: this baron does not support --check; rebuild baron or disable baron.checkOnSave",
+        );
+        return; // never publish the usage error as diagnostics
+      }
+      const count = this.publishDiagnostics(stderr, cwd);
+      this.output.appendLine(
+        code === 0
+          ? 'baron --check: ok'
+          : `baron --check: ${count.errors} error${count.errors === 1 ? '' : 's'}` +
+            (count.warnings ? `, ${count.warnings} warning${count.warnings === 1 ? '' : 's'}` : ''),
+      );
+    });
+  }
+
   async build(extraArgs?: string[], quiet = false): Promise<void> {
     if (this.running) {
       vscode.window.showInformationMessage('Baron is already running.');
       return;
     }
+    this.generation++;      // a build's diagnostics must not be overwritten by a stale check
+    this.checkProc?.kill();
     const folder = this.workspaceFolder();
     const cwd = folder?.uri.fsPath ?? path.dirname(vscode.window.activeTextEditor?.document.uri.fsPath ?? '.');
     const config = vscode.workspace.getConfiguration('baron', folder?.uri);

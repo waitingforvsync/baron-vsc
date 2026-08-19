@@ -210,3 +210,47 @@ the generated alternations are embedded in syntaxes/baron.tmLanguage.json.
   `git push && git push --tags`.
 - .vscodeignore now also excludes tools/, .github/ (and .claude/, JOURNAL.md) from the
   .vsix; images/icon.png ships.
+
+## 2026-08-19 — check-on-save and parser error recovery ##
+
+### baron --check (in ~/dev/baron, uncommitted — Rich will review/commit) ###
+Added `--check` to main.c: assemble and validate EVERYTHING (all passes, the output
+spec, even building the disc image so a full disc fails a check) but write nothing —
+no binaries, no image, no -logN files. Diagnostics and exit codes unchanged. Verified:
+a full starglobe check run writes zero files; undefined symbols and branch-out-of-range
+report exactly as a real build. 322/322 tests still pass.
+
+### Char literals (missed the first time - the docs don't mention them) ###
+lexer.c lex_char: `'X'` is exactly one character (not a quote, not a newline), no
+escapes, valued as its byte. Added to the extension lexer (malformed ones fall back to
+a lone punct for recovery) and to the grammar (constant.numeric.character.baron).
+Another the-source-is-authoritative catch: reference.md's value table omits them.
+
+### Parser error recovery (per Rich's design) ###
+Recovery = skip to the next separator, with comments/strings/char literals already
+hidden by the lexer, PLUS list-awareness, since list literals span lines:
+- `skipToStatementEnd()`: consumes to terminator / `}` / EOF; a `{` met while skipping
+  is a LIST brace (expression territory) and is consumed through its balanced close.
+- `recoverList()`: entered past a `{` whose contents broke; tracks brace nesting,
+  treats newline-only terminators as whitespace, stops AT a hard (`:`) terminator
+  leaving it in place (baron's unclosed-list behaviour).
+- List braces vs scope braces by context: statement position → scope; inside an
+  expression (or statement-tail junk) → list.
+- Every full-statement handler now ends with skipToStatementEnd(), so trailing junk
+  can never be misread as new statements (previously a stray `{` in junk could open a
+  phantom scope, and an error inside a multi-line list leaked its tail lines and its
+  closing `}` into the statement loop, spuriously closing the enclosing scope).
+Five new tests cover: mid-list errors not leaking (scope integrity preserved), hard
+terminator stopping list recovery, junk not opening phantom scopes, recovery keeping
+later defs/refs intact, char literals. 26/26 pass.
+
+### Check-on-save in the extension ###
+- `baron.checkOnSave` (default ON, replaces diagnosticsOnSave) runs `baron --check` on
+  every save of a baron file; `baron.check` command for manual runs. Uses
+  `baron.executablePath` (the existing setting) + `baron.buildArgs` + the root set.
+- Fully asynchronous: baron is a separate process and the extension only listens for
+  its output events, so a slow assembly never blocks editing. Latest-run-wins: a newer
+  check (or a build) kills the in-flight check process and its results are discarded
+  via a generation counter, so stale diagnostics can never overwrite fresh ones.
+- A baron without --check support is detected from the usage error and reported once in
+  the output channel rather than polluting the Problems panel.

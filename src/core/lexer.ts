@@ -150,6 +150,17 @@ export class Lexer {
       return tok;
     }
 
+    // Char literals: 'X' - exactly one character (not a quote, not a newline), no
+    // escapes, valued as its byte (lexer.c lex_char). A malformed one lexes as a lone
+    // punct so the parser can recover.
+    if (c === "'" && this.at(this.pos + 1) !== "'" && this.at(this.pos + 1) !== '\n'
+      && this.at(this.pos + 1) !== '' && this.at(this.pos + 2) === "'") {
+      this.pos += 3;
+      const tok = this.make(TokKind.Number, start);
+      tok.num = tok.text.charCodeAt(1);
+      return tok;
+    }
+
     // Strings: "..." with "" as an escaped quote. Unterminated strings end at the newline.
     if (c === '"') {
       this.pos++;

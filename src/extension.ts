@@ -31,6 +31,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('baron.build', () => build.build()),
     vscode.commands.registerCommand('baron.buildWithArgs', () => build.buildWithArgs()),
+    vscode.commands.registerCommand('baron.check', () => build.runCheck()),
     vscode.commands.registerCommand('baron.setRootFiles', async () => {
       const doc = vscode.window.activeTextEditor?.document;
       if (!doc || doc.languageId !== 'baron') {
@@ -54,8 +55,8 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       const config = vscode.workspace.getConfiguration('baron', doc.uri);
-      if (config.get<boolean>('diagnosticsOnSave')) {
-        void build.build(undefined, true);
+      if (config.get<boolean>('checkOnSave')) {
+        build.runCheck();
       }
     }),
 
