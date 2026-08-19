@@ -12,6 +12,8 @@ export class BaronBuild {
   private running = false;
   /** The in-flight `baron --check` process, if any. */
   private checkProc: cp.ChildProcess | undefined;
+  /** The emulator instance we last launched, if any. */
+  private emuProc: cp.ChildProcess | undefined;
   /** Generation counter: only the newest check (or build) may publish diagnostics. */
   private generation = 0;
 
@@ -102,10 +104,11 @@ export class BaronBuild {
     });
   }
 
-  async build(extraArgs?: string[], quiet = false): Promise<void> {
+  /** Run a full build; resolves true when baron exited cleanly. */
+  async build(extraArgs?: string[], quiet = false): Promise<boolean> {
     if (this.running) {
       vscode.window.showInformationMessage('Baron is already running.');
-      return;
+      return false;
     }
     this.generation++;      // a build's diagnostics must not be overwritten by a stale check
     this.checkProc?.kill();
@@ -118,7 +121,7 @@ export class BaronBuild {
       vscode.window.showWarningMessage(
         'Baron: no source files. Set "baron.sourceFiles" or open a .6502 file (use the "Baron: Set Root Source Files" command).',
       );
-      return;
+      return false;
     }
     const args = [...(extraArgs ?? config.get<string[]>('buildArgs') ?? []), ...sources];
 
@@ -130,14 +133,14 @@ export class BaronBuild {
 
     const chunks: string[] = [];
     const stderrChunks: string[] = [];
-    await new Promise<void>((resolve) => {
+    return await new Promise<boolean>((resolve) => {
       let proc: cp.ChildProcess;
       try {
         proc = cp.spawn(exe, args, { cwd });
       } catch (err) {
         this.output.appendLine(`failed to launch: ${err}`);
         this.running = false;
-        resolve();
+        resolve(false);
         return;
       }
       proc.stdout?.on('data', (d: Buffer) => chunks.push(d.toString()));
@@ -146,7 +149,7 @@ export class BaronBuild {
         this.output.appendLine(`failed to launch '${exe}': ${err.message}`);
         this.output.show(true);
         this.running = false;
-        resolve();
+        resolve(false);
       });
       proc.on('close', (code) => {
         const stdout = chunks.join('');
@@ -175,9 +178,55 @@ export class BaronBuild {
           }
         }
         this.running = false;
-        resolve();
+        resolve(code === 0);
       });
     });
+  }
+
+  /** Build, then launch the configured emulator with the disc image from -o. The
+   *  previous emulator instance we launched (if still alive) is killed first, so
+   *  rebuild-and-run iterates with one keypress. */
+  async runInEmulator(): Promise<void> {
+    const folder = this.workspaceFolder();
+    const cwd = folder?.uri.fsPath ?? path.dirname(vscode.window.activeTextEditor?.document.uri.fsPath ?? '.');
+    const config = vscode.workspace.getConfiguration('baron', folder?.uri);
+
+    const buildArgs = config.get<string[]>('buildArgs') ?? [];
+    const oIndex = buildArgs.indexOf('-o');
+    const image = oIndex >= 0 && oIndex + 1 < buildArgs.length ? buildArgs[oIndex + 1] : undefined;
+    if (!image) {
+      vscode.window.showWarningMessage(
+        'Baron: no disc image to run. Add "-o", "<image.ssd>" to baron.buildArgs first.',
+      );
+      return;
+    }
+    const imagePath = path.resolve(cwd, image);
+
+    if (!(await this.build())) {
+      return; // the build already reported its errors
+    }
+
+    const emu = config.get<string>('emulatorPath') || 'b2';
+    const emuArgs = (config.get<string[]>('emulatorArgs') ?? []).map((a) =>
+      a.split('${image}').join(imagePath),
+    );
+    if (!emuArgs.some((a) => a.includes(imagePath))) {
+      emuArgs.push(imagePath); // no ${image} placeholder anywhere: append the image
+    }
+
+    this.emuProc?.kill();
+    this.output.appendLine(`> ${emu} ${emuArgs.join(' ')}`);
+    try {
+      const proc = cp.spawn(emu, emuArgs, { cwd, detached: true, stdio: 'ignore' });
+      proc.on('error', (err) => {
+        vscode.window.showErrorMessage(`Baron: failed to launch emulator '${emu}': ${err.message}`);
+      });
+      proc.unref(); // the emulator outlives the editor if the editor closes first
+      this.emuProc = proc;
+      vscode.window.setStatusBarMessage(`Baron: running ${path.basename(imagePath)} in ${path.basename(emu)}`, 5000);
+    } catch (err) {
+      vscode.window.showErrorMessage(`Baron: failed to launch emulator '${emu}': ${err}`);
+    }
   }
 
   private publishDiagnostics(stderr: string, cwd: string): { errors: number; warnings: number } {

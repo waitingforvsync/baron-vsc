@@ -254,3 +254,12 @@ later defs/refs intact, char literals. 26/26 pass.
   via a generation counter, so stale diagnostics can never overwrite fresh ones.
 - A baron without --check support is detected from the usage error and reported once in
   the output channel rather than polluting the Problems panel.
+
+### Run in emulator ###
+`baron.runInEmulator` (Ctrl+Alt+R): full build first (so the image is fresh; a failed
+build stops there), then launch `baron.emulatorPath` (default `b2`) with
+`baron.emulatorArgs` (default `-b -0 ${image}`, b2's boot-drive-0 form). `${image}`
+substitutes the path named by `-o` in baron.buildArgs, resolved against the workspace
+folder; with no placeholder the path is appended, so other emulators configure easily.
+The previous emulator instance we launched is killed on re-run (one-keypress iterate);
+the process is detached/unref'd so it survives the editor closing.

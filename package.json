@@ -89,6 +89,10 @@
         "title": "Baron: Check (assemble without writing outputs)"
       },
       {
+        "command": "baron.runInEmulator",
+        "title": "Baron: Run in Emulator"
+      },
+      {
         "command": "baron.setRootFiles",
         "title": "Baron: Set Root Source Files from Active Editor"
       }
@@ -104,6 +108,12 @@
         "command": "baron.buildWithArgs",
         "key": "ctrl+alt+shift+b",
         "mac": "cmd+alt+shift+b",
+        "when": "editorLangId == baron || baron.hasRootFiles"
+      },
+      {
+        "command": "baron.runInEmulator",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
         "when": "editorLangId == baron || baron.hasRootFiles"
       }
     ],
@@ -131,6 +141,25 @@
           },
           "default": [],
           "description": "Extra command line switches passed to baron before the source files, e.g. [\"-o\", \"demo.ssd\", \"--opt\", \"3\", \"--title\", \"DEMO\"].",
+          "scope": "resource"
+        },
+        "baron.emulatorPath": {
+          "type": "string",
+          "default": "b2",
+          "description": "Path to the emulator executable launched by \"Baron: Run in Emulator\". A bare name is looked up on PATH.",
+          "scope": "resource"
+        },
+        "baron.emulatorArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "-b",
+            "-0",
+            "${image}"
+          ],
+          "description": "Arguments passed to the emulator. ${image} is replaced by the disc image path (the value of -o in baron.buildArgs); if no argument mentions ${image}, the image path is appended. The default suits b2: boot drive 0 from the image.",
           "scope": "resource"
         },
         "baron.checkOnSave": {

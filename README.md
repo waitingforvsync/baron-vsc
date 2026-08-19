@@ -57,6 +57,13 @@ before `{` names the scope (one separator allowed between), anonymous scopes are
   output channel.
 - **Baron: Assemble with Switches...** (`Ctrl+Alt+Shift+B`) — prompts for the switches
   first (remembered per workspace).
+- **Baron: Run in Emulator** (`Ctrl+Alt+R`) — assembles, then launches the configured
+  emulator with the disc image named by `-o` in `baron.buildArgs`. Defaults suit
+  [b2](https://github.com/tom-seddon/b2) (`b2 -b -0 <image>`: boot drive 0); point
+  `baron.emulatorPath` at the binary and shape `baron.emulatorArgs` for other emulators —
+  `${image}` in an argument is replaced by the image path (appended if absent).
+  Re-running kills the previously launched emulator instance, so build-and-try is one
+  keypress.
 - **Baron: Set Root Source Files from Active Editor** — quick way to set
   `baron.sourceFiles`.
 - A `$baron` problem matcher is contributed for custom tasks.

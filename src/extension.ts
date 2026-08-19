@@ -32,6 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('baron.build', () => build.build()),
     vscode.commands.registerCommand('baron.buildWithArgs', () => build.buildWithArgs()),
     vscode.commands.registerCommand('baron.check', () => build.runCheck()),
+    vscode.commands.registerCommand('baron.runInEmulator', () => build.runInEmulator()),
     vscode.commands.registerCommand('baron.setRootFiles', async () => {
       const doc = vscode.window.activeTextEditor?.document;
       if (!doc || doc.languageId !== 'baron') {
