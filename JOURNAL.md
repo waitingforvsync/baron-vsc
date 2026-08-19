@@ -275,6 +275,27 @@ the process is detached/unref'd so it survives the editor closing.
   the explicit -o wins (and the command warns about the shadowing). The emulator's
   discImage() follows the same precedence.
 
+### buildOverride and live (onType) checking ###
+- `baron.buildOverride`: a shell command replacing the whole default build invocation
+  for `baron.build` and Run in Emulator's build step (runs via `shell: true` in the
+  workspace folder; stderr still parsed for diagnostics). Checks and buildWithArgs
+  still construct the baron command line themselves — that is their point.
+- `baron.check` enum replaces checkOnSave: `onType` (default) debounces a check 500ms
+  after the last edit (so Enter effectively triggers one), `onSave`, `off`. Change
+  events from any file in the include graph count, not just .6502-language docs.
+- The soundness problem with onType: baron reads from DISK, but the buffer is dirty.
+  Solved with a shadow tree under os.tmpdir() (`baron-vsc-check-<hash of ws root>`):
+  every file a check involves (the units' include graphs plus INCBIN targets, via
+  Project.filesForRoots) is mirrored — dirty buffers written out, clean files
+  hardlinked (copy fallback). IMPORTANT trap avoided: always rm the mirror entry
+  before writing, or writing a dirty buffer through a stale hardlink would edit the
+  original file. The check runs with cwd = shadow root and identical relative args;
+  diagnostics are stripped of the shadow prefix and resolved against the real
+  workspace. A file outside the workspace folder disables mirroring (plain disk check).
+  The mirror is only built when something is actually dirty.
+- runCheck now also declines to start while a real build is in flight (the build's
+  diagnostics would be fresher anyway).
+
 ### Rebind + docs (Rich's request) ###
 Default keybindings are now F5 = run in emulator, F7 = build, Ctrl+F7 = build with
 switches (retro-IDE style; they shadow VS Code's debug-start/next-diff only in Baron

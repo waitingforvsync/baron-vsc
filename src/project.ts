@@ -121,6 +121,31 @@ export class Project implements FileProvider {
   indexFor(unit: Unit, file: string): FileIndex | undefined {
     return unit.files.get(file);
   }
+
+  /** Whether the document belongs to any known unit (source or via includes). */
+  contains(doc: vscode.TextDocument): boolean {
+    const file = normalize(doc.uri.fsPath);
+    return this.allUnits().some((u) => u.files.has(file));
+  }
+
+  /** Every file a check of these roots involves: the units' parsed files (the include
+   *  graph, dirty buffers included) plus the binaries INCBIN pulls in. */
+  filesForRoots(rootsAbs: string[]): Set<string> {
+    const files = new Set<string>();
+    for (const root of rootsAbs) {
+      for (const unit of this.unitsForFile(normalize(root))) {
+        for (const [file, index] of unit.files) {
+          files.add(file);
+          for (const fref of index.fileRefs) {
+            if (fref.resolved) {
+              files.add(fref.resolved);
+            }
+          }
+        }
+      }
+    }
+    return files;
+  }
 }
 
 export function normalize(p: string): string {

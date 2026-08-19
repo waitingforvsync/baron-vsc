@@ -2,11 +2,15 @@
 
 ## 0.1.1 (2026-08-19) ##
 
-- **Check on save**: every save runs `baron --check` in the background — full assembly
-  diagnostics (branch range, undefined symbols, expression errors) in the Problems
-  panel, with no output files written. Asynchronous and latest-run-wins; a slow assembly
+- **Live checking**: `baron --check` runs in the background as you type (debounced) and
+  on save — full assembly diagnostics (branch range, undefined symbols, expression
+  errors) in the Problems panel, with no output files written. Unsaved edits are checked
+  via a shadow copy of the sources. Asynchronous and latest-run-wins; a slow assembly
   never blocks the editor. Also available manually as *Baron: Check*.
-  (`baron.checkOnSave`, on by default; replaces `baron.diagnosticsOnSave`.)
+  (`baron.check`: `onType` (default) / `onSave` / `off`.)
+- **`baron.buildOverride`**: a shell command that completely replaces the default build
+  invocation (for *Baron: Assemble* and *Run in Emulator*'s build step) — e.g. a build
+  script. Its stderr is still parsed into the Problems panel.
 - **Run in Emulator** (*Baron: Run in Emulator*): assembles, then boots the built disc
   image in the configured emulator (defaults suit b2). Re-running replaces the previous
   emulator instance. (`baron.emulatorPath`, `baron.emulatorArgs` with `${image}`.)

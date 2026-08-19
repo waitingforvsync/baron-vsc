@@ -14,8 +14,9 @@ import {
 
 export function activate(context: vscode.ExtensionContext): void {
   const project = new Project(context);
-  const build = new BaronBuild(context);
+  const build = new BaronBuild(context, project);
   const selector: vscode.DocumentSelector = { language: 'baron' };
+  let checkTimer: ReturnType<typeof setTimeout> | undefined;
 
   context.subscriptions.push(
     vscode.languages.registerDefinitionProvider(selector, new BaronDefinitionProvider(project)),
@@ -124,13 +125,31 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (doc.languageId !== 'baron') {
+      if (doc.languageId !== 'baron' && !project.contains(doc)) {
         return;
       }
       const config = vscode.workspace.getConfiguration('baron', doc.uri);
-      if (config.get<boolean>('checkOnSave')) {
+      if (config.get<string>('check') !== 'off') {
         build.runCheck();
       }
+    }),
+
+    // onType checks: debounced so a burst of typing produces one check shortly after
+    // the last keystroke (hitting Enter therefore checks the line just finished).
+    // Unsaved edits are seen via the shadow copy the check runner builds.
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      if (e.contentChanges.length === 0) {
+        return;
+      }
+      if (e.document.languageId !== 'baron' && !project.contains(e.document)) {
+        return;
+      }
+      const config = vscode.workspace.getConfiguration('baron', e.document.uri);
+      if (config.get<string>('check') !== 'onType') {
+        return;
+      }
+      clearTimeout(checkTimer);
+      checkTimer = setTimeout(() => build.runCheck(), 500);
     }),
 
     vscode.workspace.onDidChangeConfiguration((e) => {

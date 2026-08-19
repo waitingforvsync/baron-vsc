@@ -45,13 +45,15 @@ before `{` names the scope (one separator allowed between), anonymous scopes are
 `IF` does not scope, `FOR` bodies and macro/function bodies do.
 
 ### Checking and building ###
-- **Check on save** (`baron.checkOnSave`, on by default) — every save runs
-  `baron --check` in the background: a full assembly of the root set (branch range,
-  undefined symbols, expression errors — everything the real assembler knows) that
-  writes no output files. Errors land in the Problems panel as red squiggles. The check
-  runs asynchronously and a newer save kills and supersedes an in-flight one, so slow
-  assemblies never block the editor. Requires a baron built with `--check` support;
-  also available manually as **Baron: Check**.
+- **Live checking** (`baron.check`, default `onType`) — `baron --check` runs in the
+  background shortly after you stop typing (and on save): a full assembly of the root
+  set (branch range, undefined symbols, expression errors — everything the real
+  assembler knows) that writes no output files. Unsaved edits are included: the check
+  runs against a shadow copy of the sources carrying the live editor buffers. Errors
+  land in the Problems panel as red squiggles. Checks are asynchronous and a newer one
+  kills and supersedes an in-flight one, so slow assemblies never block the editor.
+  Set `baron.check` to `onSave` or `off` to dial it back; **Baron: Check** runs one
+  manually. Requires a baron built with `--check` support.
 - **Baron: Assemble** (`F7`) — runs baron on the configured root files with the
   configured switches. Errors and warnings land in the Problems panel and the *Baron*
   output channel.
@@ -96,7 +98,13 @@ graphs they define what go-to-definition can see. With no root files configured,
 active editor's file is used.
 
 If baron isn't on your PATH, point `baron.executablePath` at the binary. Set
-`baron.checkOnSave` to `false` to turn off the on-save check.
+`baron.check` to `onSave` or `off` to dial back the live checking.
+
+To build with your own script instead of the default invocation, set
+`baron.buildOverride` to any shell command (e.g. `"./build.sh"`): **Baron: Assemble**
+and the build step of **Run in Emulator** then run it verbatim (its stderr is still
+parsed for `file:line:col` diagnostics), while checks and **Assemble with Switches...**
+keep invoking baron directly with `baron.sourceFiles`.
 
 ## Development ##
 

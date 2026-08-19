@@ -1,8 +1,12 @@
 // Launching baron and turning its stderr diagnostics into Problems.
 
 import * as cp from 'child_process';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { docFile, Project } from './project';
 
 const DIAG_RE = /^(.+?):(\d+):(\d+):\s+(error|warning):\s+(.*)$/;
 
@@ -17,7 +21,10 @@ export class BaronBuild {
   /** Generation counter: only the newest check (or build) may publish diagnostics. */
   private generation = 0;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly project: Project,
+  ) {
     this.output = vscode.window.createOutputChannel('Baron');
     this.diagnostics = vscode.languages.createDiagnosticCollection('baron');
     context.subscriptions.push(this.output, this.diagnostics);
@@ -69,14 +76,54 @@ export class BaronBuild {
     return [];
   }
 
+  /** Mirror the check's file set into a shadow tree under the OS temp dir, with dirty
+   *  editor buffers written out and clean files hardlinked (copied on failure), so a
+   *  check can see unsaved edits. Returns the shadow root, or undefined when mirroring
+   *  is not possible (a file lives outside the workspace folder). */
+  private prepareMirror(wsRoot: string, files: Set<string>): string | undefined {
+    const dir = path.join(
+      os.tmpdir(),
+      'baron-vsc-check-' + crypto.createHash('md5').update(wsRoot).digest('hex').slice(0, 12),
+    );
+    for (const file of files) {
+      const rel = path.relative(wsRoot, file);
+      if (rel.startsWith('..') || path.isAbsolute(rel)) {
+        return undefined; // outside the workspace: fall back to a plain on-disk check
+      }
+      const dest = path.join(dir, rel);
+      try {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        // Always remove first: writing through a stale hardlink would edit the ORIGINAL.
+        fs.rmSync(dest, { force: true });
+        const doc = vscode.workspace.textDocuments.find((d) => docFile(d) === file);
+        if (doc) {
+          fs.writeFileSync(dest, doc.getText());
+        } else {
+          try {
+            fs.linkSync(file, dest);
+          } catch {
+            fs.copyFileSync(file, dest); // cross-device or exotic fs: copy instead
+          }
+        }
+      } catch {
+        // A missing source file: leave it absent and let baron report the include error.
+      }
+    }
+    return dir;
+  }
+
   /** Run `baron --check`: assemble everything, write nothing, refresh the Problems
    *  panel. Entirely asynchronous - baron runs as a separate process and we only listen
    *  for its output, so the editor never waits on a slow assembly. If a newer check (or
    *  a build) starts while one is in flight, the old process is killed and its results
-   *  discarded - the newest run always wins. */
+   *  discarded - the newest run always wins. Unsaved edits are included by mirroring
+   *  the involved files into a shadow tree and running the check there. */
   runCheck(): void {
+    if (this.running) {
+      return; // a real build is in flight; it will publish fresh diagnostics itself
+    }
     const folder = this.workspaceFolder();
-    const cwd = folder?.uri.fsPath ?? path.dirname(vscode.window.activeTextEditor?.document.uri.fsPath ?? '.');
+    const wsRoot = folder?.uri.fsPath ?? path.dirname(vscode.window.activeTextEditor?.document.uri.fsPath ?? '.');
     const config = vscode.workspace.getConfiguration('baron', folder?.uri);
     const exe = config.get<string>('executablePath') || 'baron';
     const sources = this.sourceFiles(folder);
@@ -84,6 +131,15 @@ export class BaronBuild {
       return; // nothing configured and no active baron file: silently do nothing
     }
     const args = ['--check', ...this.effectiveArgs(config, config.get<string[]>('buildArgs') ?? []), ...sources];
+
+    // Check unsaved work: when any involved document is dirty, run against a shadow
+    // copy of the file set with the editor buffers' contents.
+    let cwd = wsRoot;
+    const involved = this.project.filesForRoots(sources.map((s) => path.resolve(wsRoot, s)));
+    const anyDirty = vscode.workspace.textDocuments.some((d) => d.isDirty && involved.has(docFile(d)));
+    if (anyDirty) {
+      cwd = this.prepareMirror(wsRoot, involved) ?? wsRoot;
+    }
 
     const gen = ++this.generation;
     this.checkProc?.kill(); // supersede any in-flight check
@@ -108,14 +164,15 @@ export class BaronBuild {
         return; // superseded (or killed): a newer run owns the Problems panel
       }
       this.checkProc = undefined;
-      const stderr = stderrChunks.join('');
+      // Diagnostics resolve against the real workspace, never the shadow tree.
+      const stderr = stderrChunks.join('').split(cwd + path.sep).join('');
       if (code !== 0 && /unknown option '--check'/.test(stderr)) {
         this.output.appendLine(
           "baron --check: this baron does not support --check; rebuild baron or disable baron.checkOnSave",
         );
         return; // never publish the usage error as diagnostics
       }
-      const count = this.publishDiagnostics(stderr, cwd);
+      const count = this.publishDiagnostics(stderr, wsRoot);
       this.output.appendLine(
         code === 0
           ? 'baron --check: ok'
@@ -137,19 +194,28 @@ export class BaronBuild {
     const cwd = folder?.uri.fsPath ?? path.dirname(vscode.window.activeTextEditor?.document.uri.fsPath ?? '.');
     const config = vscode.workspace.getConfiguration('baron', folder?.uri);
     const exe = config.get<string>('executablePath') || 'baron';
-    const sources = this.sourceFiles(folder);
-    if (sources.length === 0) {
-      vscode.window.showWarningMessage(
-        'Baron: no source files. Set "baron.sourceFiles" or open a .6502 file (use the "Baron: Set Root Source Files" command).',
-      );
-      return false;
+
+    // baron.buildOverride replaces the whole default invocation (for the plain build
+    // only - "Assemble with Switches..." always builds a baron command line, that being
+    // its point). It runs through the shell, so a script or pipeline works.
+    const override = extraArgs === undefined ? (config.get<string>('buildOverride') ?? '').trim() : '';
+
+    let args: string[] = [];
+    if (override === '') {
+      const sources = this.sourceFiles(folder);
+      if (sources.length === 0) {
+        vscode.window.showWarningMessage(
+          'Baron: no source files. Set "baron.sourceFiles" or open a .6502 file (use the "Baron: Set Root Source Files" command).',
+        );
+        return false;
+      }
+      args = [...this.effectiveArgs(config, extraArgs ?? config.get<string[]>('buildArgs') ?? []), ...sources];
     }
-    const args = [...this.effectiveArgs(config, extraArgs ?? config.get<string[]>('buildArgs') ?? []), ...sources];
 
     // Save dirty baron documents first, as any build tool expects.
     await vscode.workspace.saveAll(false);
 
-    this.output.appendLine(`> ${exe} ${args.join(' ')}`);
+    this.output.appendLine(override !== '' ? `> ${override}` : `> ${exe} ${args.join(' ')}`);
     this.running = true;
 
     const chunks: string[] = [];
@@ -157,7 +223,9 @@ export class BaronBuild {
     return await new Promise<boolean>((resolve) => {
       let proc: cp.ChildProcess;
       try {
-        proc = cp.spawn(exe, args, { cwd });
+        proc = override !== ''
+          ? cp.spawn(override, { cwd, shell: true })
+          : cp.spawn(exe, args, { cwd });
       } catch (err) {
         this.output.appendLine(`failed to launch: ${err}`);
         this.running = false;

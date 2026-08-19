@@ -175,10 +175,26 @@
           "description": "Arguments passed to the emulator. ${image} is replaced by the disc image path (the value of -o in baron.buildArgs); if no argument mentions ${image}, the image path is appended. The default suits b2: boot drive 0 from the image.",
           "scope": "resource"
         },
-        "baron.checkOnSave": {
-          "type": "boolean",
-          "default": true,
-          "description": "Run `baron --check` whenever a Baron file is saved and show its errors in the Problems panel. A check run assembles everything but writes no output files. Requires a baron built with --check support.",
+        "baron.buildOverride": {
+          "type": "string",
+          "default": "",
+          "description": "When set, a shell command that completely replaces the default build invocation (baron + buildArgs + outputFile + sourceFiles) for \"Baron: Assemble\" and the build step of \"Baron: Run in Emulator\" - e.g. a build script. Its stderr is still parsed for file:line:col diagnostics. Checks and \"Assemble with Switches...\" still invoke baron directly.",
+          "scope": "resource"
+        },
+        "baron.check": {
+          "type": "string",
+          "enum": [
+            "onType",
+            "onSave",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Run baron --check shortly after you stop typing (unsaved edits are checked via a shadow copy) and on save.",
+            "Run baron --check only when a file is saved.",
+            "Never run checks automatically (the Baron: Check command still works)."
+          ],
+          "default": "onType",
+          "description": "When to run `baron --check` in the background and refresh the Problems panel. A check assembles everything but writes no output files. Requires a baron built with --check support.",
           "scope": "resource"
         }
       }
