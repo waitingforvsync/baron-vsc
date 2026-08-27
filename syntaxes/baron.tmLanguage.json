@@ -190,7 +190,7 @@
     },
     "directives": {
       "name": "keyword.control.directive.baron",
-      "match": "(?i)\\b(equb|equs|equw|equd|skipto|skip|align|incbin|include|incsection|section|endsection|if|elif|else|endif|for|next|macro|endmacro|function|print|error|zpreserve|zpauto1|zpauto2|zpauto|unreachable|cancall|canjump|endbasic|basic)\\b"
+      "match": "(?i)\\b(equb|equs|equw|equd|skipto|skip|align|incbin|include|incsection|section|endsection|if|elif|else|endif|for|next|macro|endmacro|function|print|error|zpreserve|zpauto1|zpauto2|zpauto|unreachable|cancall|canjump|discard|zpinterrupt|zpentry|endbasic|basic)\\b"
     },
     "mnemonics-cmos": {
       "name": "keyword.other.mnemonic.cmos.baron",

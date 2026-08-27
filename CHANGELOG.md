@@ -1,5 +1,12 @@
 # Changelog #
 
+## 0.1.2 (2026-08-27) ##
+
+- New directive keywords recognised by the highlighter, parser and completions:
+  `DISCARD` (a ZPAUTO value is dead here - takes a variable list), and the bare
+  markers `ZPENTRY` / `ZPINTERRUPT` (entry-point / interrupt-handler roots for the
+  zero-page allocator).
+
 ## 0.1.1 (2026-08-19) ##
 
 - **Live checking**: `baron --check` runs in the background as you type (debounced) and

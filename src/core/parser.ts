@@ -480,7 +480,7 @@ class FileParser {
   private parseDirective(tok: Token): void {
     switch (tok.lower) {
       case 'equb': case 'equs': case 'equw': case 'equd':
-      case 'cancall': case 'canjump': case 'zpreserve':
+      case 'cancall': case 'canjump': case 'zpreserve': case 'discard':
         this.parseExprList();
         break;
       case 'skip': case 'skipto': case 'align': case 'if':
@@ -548,7 +548,7 @@ class FileParser {
         this.parseZpNames(`${sizeText} bytes`);
         break;
       }
-      case 'unreachable':
+      case 'unreachable': case 'zpentry': case 'zpinterrupt':
         break;
       default:
         this.skipToStatementEnd();

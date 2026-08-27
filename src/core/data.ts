@@ -25,7 +25,8 @@ export const CMOS_INDIRECT_MNEMONICS = new Set([
 /** Statement-starting directive keywords. */
 export const DIRECTIVES = new Set([
   'skip', 'skipto', 'align', 'section', 'zpreserve', 'zpauto', 'zpauto1',
-  'zpauto2', 'unreachable', 'cancall', 'canjump', 'equb', 'equs', 'equw',
+  'zpauto2', 'unreachable', 'cancall', 'canjump', 'discard', 'zpentry',
+  'zpinterrupt', 'equb', 'equs', 'equw',
   'equd', 'if', 'for', 'include', 'incbin', 'incsection', 'basic', 'macro',
   'function', 'print', 'error',
 ]);
