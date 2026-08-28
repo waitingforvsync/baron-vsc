@@ -202,7 +202,7 @@
     },
     "builtin-functions": {
       "name": "support.function.baron",
-      "match": "(?i)\\b(lo|hi|abs|int|floor|round|ceil|sqrt|sin|cos|tan|asin|acos|atan|log|ln|exp|not|rnd|len|shape|rank|full|flatten|concat|zip|reverse|sort|sum|product|min|max|defined)\\s*(?=\\()"
+      "match": "(?i)\\b(lo|hi|abs|int|floor|round|trunc|ceil|sqrt|sin|cos|tan|asin|acos|atan|log|ln|exp|not|rnd|len|shape|rank|full|repeated|flatten|concat|zip|reverse|sort|sum|product|min|max|defined|codes|chr|find|is_string|is_number|error)\\s*(?=\\()"
     },
     "constants": {
       "patterns": [
@@ -251,7 +251,7 @@
         },
         {
           "name": "keyword.operator.baron",
-          "match": "<<|>>|<=|>=|==|!=|<>|[-+*/^=<>#]"
+          "match": "<<|>>|<=|>=|==|!=|<>|[-+*/^=<>#~]"
         }
       ]
     },

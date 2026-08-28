@@ -1,5 +1,13 @@
 # Changelog #
 
+## 0.1.3 (2026-08-28) ##
+
+- `REPEATED` recognised by the highlighter, parser and completions - baron's new
+  alias for the `FULL` builtin.
+- The string and type builtins caught up: `TRUNC`, `CODES`, `CHR`, `FIND`,
+  `IS_STRING`, `IS_NUMBER` and the `ERROR(...)` function form, plus the unary `~`
+  hex-format operator, all recognised by the highlighter, parser and completions.
+
 ## 0.1.2 (2026-08-27) ##
 
 - New directive keywords recognised by the highlighter, parser and completions:

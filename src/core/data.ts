@@ -44,11 +44,12 @@ export const WORD_OPERATORS = new Set(['div', 'mod', 'and', 'or', 'eor']);
 
 /** Built-in functions callable as name(args). */
 export const BUILTIN_FUNCTIONS = new Set([
-  'lo', 'hi', 'abs', 'int', 'floor', 'round', 'ceil', 'sqrt',
+  'lo', 'hi', 'abs', 'int', 'floor', 'round', 'trunc', 'ceil', 'sqrt',
   'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'log', 'ln', 'exp',
   'not', 'rnd',
-  'len', 'shape', 'rank', 'full', 'flatten', 'concat', 'zip', 'reverse',
+  'len', 'shape', 'rank', 'full', 'repeated', 'flatten', 'concat', 'zip', 'reverse',
   'sort', 'sum', 'product', 'min', 'max', 'defined',
+  'codes', 'chr', 'find', 'is_string', 'is_number', 'error',
 ]);
 
 /** Attributes baron acts on in a SECTION statement. */

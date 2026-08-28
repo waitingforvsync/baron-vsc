@@ -990,7 +990,7 @@ class FileParser {
       return !CLOSERS.has(tok.lower);
     }
     if (tok.kind === TokKind.Punct) {
-      return ['(', '{', '-', '+', '<', '>', '*', '@+', '@-', '..', '..<'].includes(tok.lower);
+      return ['(', '{', '-', '+', '<', '>', '~', '*', '@+', '@-', '..', '..<'].includes(tok.lower);
     }
     return false;
   }
@@ -998,7 +998,7 @@ class FileParser {
   /** Parse one expression; returns null (consuming nothing) if none can start here. */
   parseExpr(): Expr | null {
     const tok = this.peek();
-    if (this.isPunct(tok, '<') || this.isPunct(tok, '>')) {
+    if (this.isPunct(tok, '<') || this.isPunct(tok, '>') || this.isPunct(tok, '~')) {
       this.next();
       const e = this.parseExpr();
       return e ? { t: 'un', op: tok.lower, e } : { t: 'opaque' };
