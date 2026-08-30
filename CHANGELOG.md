@@ -2,6 +2,10 @@
 
 ## 0.2.0 (2026-08-30) ##
 
+- Brackets inside comments and strings are no longer rainbow-coloured by the
+  editor's bracket-pair colorization (the grammar now declares
+  `unbalancedBracketScopes` for comment and string tokens).
+
 - Zero-page allocator keywords renamed to match baron's new `ZA_` spelling:
   `ZPRESERVE` -> `ZA_POOL`, `ZPAUTO`/`ZPAUTO1`/`ZPAUTO2` -> `ZA_AUTO`/`ZA_AUTO1`/
   `ZA_AUTO2`, `UNREACHABLE` -> `ZA_UNREACHABLE`, `CANCALL` -> `ZA_CANCALL`,

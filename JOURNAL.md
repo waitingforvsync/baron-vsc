@@ -329,3 +329,13 @@ MNEMONICS in data.ts (plain NMOS - they emit &24/&2C, so not CMOS_ONLY), the
 mnemonics rule in the grammar (bitzp|bitabs listed before bit so the longer
 match wins), and out of parseDirective - parseInstruction's implied path handles
 their no-operand form. Repackaged 0.2.0.
+
+## 2026-08-31: bracket colorization in comments (folded into 0.2.0) ##
+
+Rich noticed VS Code's bracket-pair colorization rainbow-colouring ()/{} inside
+comments. Cause: bracket-pair colorization colours every bracket in every token
+unless the grammar contribution says otherwise - the TextMate scope name being
+comment.* is NOT enough. Fix: `"unbalancedBracketScopes": ["comment", "string"]`
+on the grammars entry in package.json (scope-prefix selectors, so they cover the
+bbcbasic comment/string scopes inside BASIC blocks too). Strings included for the
+same reason even though Rich only reported comments.

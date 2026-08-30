@@ -47,7 +47,11 @@
       {
         "language": "baron",
         "scopeName": "source.baron",
-        "path": "./syntaxes/baron.tmLanguage.json"
+        "path": "./syntaxes/baron.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "comment",
+          "string"
+        ]
       }
     ],
     "semanticTokenTypes": [
