@@ -22,6 +22,9 @@
       "include": "#numbers"
     },
     {
+      "include": "#za-directives"
+    },
+    {
       "include": "#directives"
     },
     {
@@ -188,9 +191,13 @@
         }
       ]
     },
+    "za-directives": {
+      "name": "support.type.zeropage.baron",
+      "match": "(?i)\\b(za_pool|za_auto1|za_auto2|za_auto|za_unreachable|za_cancall|za_canjump|za_returnto|za_return|za_discard|za_entry|za_interrupt)\\b"
+    },
     "directives": {
       "name": "keyword.control.directive.baron",
-      "match": "(?i)\\b(equb|equs|equw|equd|skipto|skip|align|incbin|include|incsection|section|endsection|if|elif|else|endif|for|next|macro|endmacro|function|print|error|zpreserve|zpauto1|zpauto2|zpauto|unreachable|cancall|canjump|discard|zpinterrupt|zpentry|endbasic|basic)\\b"
+      "match": "(?i)\\b(equb|equs|equw|equd|skipto|skip|align|incbin|include|incsection|section|endsection|if|elif|else|endif|for|next|macro|endmacro|function|print|error|endbasic|basic)\\b"
     },
     "mnemonics-cmos": {
       "name": "keyword.other.mnemonic.cmos.baron",
@@ -198,7 +205,7 @@
     },
     "mnemonics": {
       "name": "keyword.other.mnemonic.baron",
-      "match": "(?i)\\b(adc|and|asl|bcc|bcs|beq|bit|bmi|bne|bpl|brk|bvc|bvs|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|jmp|jsr|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|rti|rts|sbc|sec|sed|sei|sta|stx|sty|tax|tay|tsx|txa|txs|tya)\\b"
+      "match": "(?i)\\b(adc|and|asl|bcc|bcs|beq|bitzp|bitabs|bit|bmi|bne|bpl|brk|bvc|bvs|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|jmp|jsr|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|rti|rts|sbc|sec|sed|sei|sta|stx|sty|tax|tay|tsx|txa|txs|tya)\\b"
     },
     "builtin-functions": {
       "name": "support.function.baron",

@@ -2,7 +2,7 @@
   "name": "baron-vsc",
   "displayName": "Baron BBC Micro Assembler",
   "description": "Language support for the Baron BBC Micro assembler: syntax highlighting (including inline BBC BASIC), go to definition, completion, hover, outline, references, and build integration.",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "publisher": "RichTalbot-Watkins",
   "author": {
     "name": "Rich Talbot-Watkins"

@@ -1,5 +1,20 @@
 # Changelog #
 
+## 0.2.0 (2026-08-30) ##
+
+- Zero-page allocator keywords renamed to match baron's new `ZA_` spelling:
+  `ZPRESERVE` -> `ZA_POOL`, `ZPAUTO`/`ZPAUTO1`/`ZPAUTO2` -> `ZA_AUTO`/`ZA_AUTO1`/
+  `ZA_AUTO2`, `UNREACHABLE` -> `ZA_UNREACHABLE`, `CANCALL` -> `ZA_CANCALL`,
+  `CANJUMP` -> `ZA_CANJUMP`, `DISCARD` -> `ZA_DISCARD`, `ZPENTRY` -> `ZA_ENTRY`,
+  `ZPINTERRUPT` -> `ZA_INTERRUPT`. The old spellings are no longer recognised.
+- New allocator keywords: `ZA_RETURN` (this jump returns to our caller) and
+  `ZA_RETURNTO` (where a JSR resumes - takes a target list).
+- New pseudo-opcodes `BITZP` / `BITABS` (emit a BIT opcode that swallows the
+  next one or two bytes), highlighted and completed as mnemonics.
+- All `ZA_` keywords now highlight in their own syntax category
+  (`support.type.zeropage.baron`), so they colour differently from the other
+  directives.
+
 ## 0.1.3 (2026-08-28) ##
 
 - `REPEATED` recognised by the highlighter, parser and completions - baron's new

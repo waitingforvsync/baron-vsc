@@ -408,10 +408,10 @@ test('basic blocks are opaque', () => {
   assert.deepEqual(index.mnemonics.map((m) => m.mnemonic), ['ldx', 'jmp']);
 });
 
-// ---- zpauto ----
+// ---- za_auto ----
 
-test('zpauto names bind in the current scope', () => {
-  const src = 'ZPRESERVE &00..&FC\nZPAUTO2 ptr, other\n.start\n{\nZPAUTO1 xpos\nLDA xpos\n}\nSTA ptr\nLDA xpos\n';
+test('za_auto names bind in the current scope', () => {
+  const src = 'ZA_POOL &00..&FC\nZA_AUTO2 ptr, other\n.start\n{\nZA_AUTO1 xpos\nLDA xpos\n}\nSTA ptr\nLDA xpos\n';
   const unit = parse(src);
   const index = unit.files.get('main.6502')!;
   const inner = index.refs.find((r) => r.parts[0].name === 'xpos')!;

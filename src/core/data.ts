@@ -10,6 +10,8 @@ export const MNEMONICS = new Set([
   'tax', 'tay', 'tsx', 'txa', 'txs', 'tya',
   // 65C02 only
   'bra', 'dea', 'ina', 'phx', 'phy', 'plx', 'ply', 'stz', 'clr', 'trb', 'tsb',
+  // BIT opcodes that swallow the following one/two bytes
+  'bitzp', 'bitabs',
 ]);
 
 /** Mnemonics that exist only on the 65C02, whatever the addressing mode. */
@@ -24,11 +26,11 @@ export const CMOS_INDIRECT_MNEMONICS = new Set([
 
 /** Statement-starting directive keywords. */
 export const DIRECTIVES = new Set([
-  'skip', 'skipto', 'align', 'section', 'zpreserve', 'zpauto', 'zpauto1',
-  'zpauto2', 'unreachable', 'cancall', 'canjump', 'discard', 'zpentry',
-  'zpinterrupt', 'equb', 'equs', 'equw',
-  'equd', 'if', 'for', 'include', 'incbin', 'incsection', 'basic', 'macro',
-  'function', 'print', 'error',
+  'skip', 'skipto', 'align', 'section', 'za_pool', 'za_auto', 'za_auto1',
+  'za_auto2', 'za_unreachable', 'za_cancall', 'za_canjump', 'za_return',
+  'za_returnto', 'za_discard', 'za_entry', 'za_interrupt', 'equb', 'equs', 'equw',
+  'equd', 'if', 'for', 'include', 'incbin', 'incsection',
+  'basic', 'macro', 'function', 'print', 'error',
 ]);
 
 /** Block closers. */

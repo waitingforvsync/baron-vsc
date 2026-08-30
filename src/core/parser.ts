@@ -480,7 +480,8 @@ class FileParser {
   private parseDirective(tok: Token): void {
     switch (tok.lower) {
       case 'equb': case 'equs': case 'equw': case 'equd':
-      case 'cancall': case 'canjump': case 'zpreserve': case 'discard':
+      case 'za_cancall': case 'za_canjump': case 'za_returnto':
+      case 'za_pool': case 'za_discard':
         this.parseExprList();
         break;
       case 'skip': case 'skipto': case 'align': case 'if':
@@ -532,13 +533,13 @@ class FileParser {
       case 'basic':
         this.parseBasic(tok);
         break;
-      case 'zpauto1':
+      case 'za_auto1':
         this.parseZpNames('1 byte');
         break;
-      case 'zpauto2':
+      case 'za_auto2':
         this.parseZpNames('2 bytes');
         break;
-      case 'zpauto': {
+      case 'za_auto': {
         const sizeStart = this.lx.getPos();
         this.parseExpr();
         const sizeText = this.index.text.slice(sizeStart, this.lx.getPos()).trim();
@@ -548,7 +549,8 @@ class FileParser {
         this.parseZpNames(`${sizeText} bytes`);
         break;
       }
-      case 'unreachable': case 'zpentry': case 'zpinterrupt':
+      case 'za_unreachable': case 'za_entry': case 'za_interrupt':
+      case 'za_return':
         break;
       default:
         this.skipToStatementEnd();
