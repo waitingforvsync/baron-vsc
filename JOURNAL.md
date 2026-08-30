@@ -302,3 +302,30 @@ switches (retro-IDE style; they shadow VS Code's debug-start/next-diff only in B
 contexts via the `when` clause). Rich bumped to 0.1.1 and renamed the display name to
 "Baron BBC Micro Assembler" directly in package.json. README and CHANGELOG brought up
 to date (earlier journal entries keep the old bindings they were written under).
+
+## 2026-08-30: 0.2.0 - ZA_ keyword rename ##
+
+Baron renamed the zero-page allocator keywords to a uniform `ZA_` prefix (verified
+against ~/dev/baron/src/assemble.c keyword table): ZPRESERVE->ZA_POOL,
+ZPAUTO/1/2->ZA_AUTO/1/2, UNREACHABLE->ZA_UNREACHABLE, CANCALL->ZA_CANCALL,
+CANJUMP->ZA_CANJUMP, DISCARD->ZA_DISCARD, ZPENTRY->ZA_ENTRY,
+ZPINTERRUPT->ZA_INTERRUPT. New keywords: ZA_RETURN (bare marker - a jump that
+returns to our caller), ZA_RETURNTO (target list, like ZA_CANCALL - where a JSR
+resumes), and BITZP/BITABS (no operands - emit &24/&2C to swallow the next 1/2
+bytes; these are ordinary directives, not ZA_).
+
+Updated: data.ts DIRECTIVES, parser.ts parseDirective cases (ZA_RETURNTO joins the
+expr-list group; ZA_RETURN/BITZP/BITABS join the bare-marker group), tmLanguage,
+tests + demo fixture. Old spellings dropped entirely - baron no longer accepts them.
+
+Per Rich's request the ZA_ keywords get their own grammar rule (`za-directives`,
+scope `support.type.zeropage.baron`, included before `directives`) so they colour
+differently from keyword.control directives - teal vs purple in the default Dark+
+theme. Packaged baron-vsc-0.2.0.vsix.
+
+### Correction (same day) ###
+Rich: BITZP/BITABS count as opcodes category-wise, not directives. Moved to
+MNEMONICS in data.ts (plain NMOS - they emit &24/&2C, so not CMOS_ONLY), the
+mnemonics rule in the grammar (bitzp|bitabs listed before bit so the longer
+match wins), and out of parseDirective - parseInstruction's implied path handles
+their no-operand form. Repackaged 0.2.0.
