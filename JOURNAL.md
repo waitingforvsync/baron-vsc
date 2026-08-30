@@ -330,7 +330,7 @@ mnemonics rule in the grammar (bitzp|bitabs listed before bit so the longer
 match wins), and out of parseDirective - parseInstruction's implied path handles
 their no-operand form. Repackaged 0.2.0.
 
-## 2026-08-31: bracket colorization in comments (folded into 0.2.0) ##
+## 2026-08-31: 0.2.1 - bracket colorization in comments ##
 
 Rich noticed VS Code's bracket-pair colorization rainbow-colouring ()/{} inside
 comments. Cause: bracket-pair colorization colours every bracket in every token
@@ -339,3 +339,5 @@ comment.* is NOT enough. Fix: `"unbalancedBracketScopes": ["comment", "string"]`
 on the grammars entry in package.json (scope-prefix selectors, so they cover the
 bbcbasic comment/string scopes inside BASIC blocks too). Strings included for the
 same reason even though Rich only reported comments.
+(Postscript: the fix was briefly folded into 0.2.0, but the marketplace refuses
+re-uploads of an existing version number, so it shipped as 0.2.1 after all.)
