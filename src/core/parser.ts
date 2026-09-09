@@ -601,8 +601,10 @@ class FileParser {
     const def = this.define('section', name, this.scope);
     this.up.addGlobal(this.up.unit.sections, def);
 
-    const prevCmos = this.cmos; // nested sections inherit attributes (assemble.c)
-    let cmosSeen = false;
+    // Attributes are never inherited (assemble.c): a nested section is NMOS unless its own
+    // SECTION line says cmos = TRUE. prevCmos is what ENDSECTION restores.
+    const prevCmos = this.cmos;
+    this.cmos = false;
 
     const attrs: string[] = [];
     while (this.isPunct(this.peek(), ',')) {
@@ -619,15 +621,11 @@ class FileParser {
       const expr = this.parseExpr();
       attrs.push(key.lower);
       if (key.lower === 'cmos') {
-        cmosSeen = true;
         const v = evalCmos(expr);
         // Unresolvable (forward-referenced) cmos: assume enabled, so we never flag
         // valid CMOS code as illegal on incomplete information.
         this.cmos = v === undefined ? true : v !== 0;
       }
-    }
-    if (!cmosSeen) {
-      this.cmos = prevCmos;
     }
 
     const node: OutlineNode = {

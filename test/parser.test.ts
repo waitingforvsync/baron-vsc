@@ -229,6 +229,9 @@ test('sections: definition, incsection reference, cmos-aware mnemonics', () => {
     'SECTION Inner, cmos = FALSE',
     'STZ &70',
     'ENDSECTION',
+    'SECTION Plain',
+    'PHY',
+    'ENDSECTION',
     'JMP (tbl,X)',
     'ENDSECTION',
     'BRA out',
@@ -247,6 +250,8 @@ test('sections: definition, incsection reference, cmos-aware mnemonics', () => {
   assert.deepEqual(byName('bit').map((m) => [m.cmosOnly, m.cmosContext]), [[true, true], [true, true]]);
   // Inner section opts back out: STZ flagged as needing cmos in an NMOS context.
   assert.deepEqual(byName('stz').map((m) => [m.cmosOnly, m.cmosContext]), [[true, false]]);
+  // A nested section with no cmos attribute of its own is NMOS: attributes are never inherited.
+  assert.deepEqual(byName('phy').map((m) => [m.cmosOnly, m.cmosContext]), [[true, false]]);
   // Back in the outer section: cmos again.
   assert.deepEqual(byName('jmp').map((m) => [m.cmosOnly, m.cmosContext]), [[true, true]]);
   // Outside all sections: NMOS.
