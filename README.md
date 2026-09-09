@@ -18,8 +18,8 @@ abbreviations resolve to the right keyword, `PROC`/`FN` names, `*` commands, `RE
 raw tails, uppercase-only `&` hex, and line numbers.
 
 ### CMOS-aware opcode colouring ###
-The parser tracks `SECTION` nesting and evaluates the `cmos` attribute (inherited by
-nested sections, exactly as baron does). 65C02-only instructions — the extra mnemonics,
+The parser tracks `SECTION` nesting and evaluates the `cmos` attribute (never inherited
+by nested sections, exactly as baron does). 65C02-only instructions — the extra mnemonics,
 and the CMOS-only addressing modes such as `LDA (zp)`, `BIT #`, `BIT zp,X`, `INC A` and
 `JMP (abs,X)` — are coloured as ordinary opcodes inside a `cmos = TRUE` section, and as
 **invalid** (red) in plain NMOS context, via semantic tokens.
