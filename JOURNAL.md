@@ -341,3 +341,41 @@ bbcbasic comment/string scopes inside BASIC blocks too). Strings included for th
 same reason even though Rich only reported comments.
 (Postscript: the fix was briefly folded into 0.2.0, but the marketplace refuses
 re-uploads of an existing version number, so it shipped as 0.2.1 after all.)
+
+## 2026-09-23: 0.4.0 - catching up with baron 0.3.0 + 0.4.0 ##
+
+Rich asked for the plugin to match baron's new surface ("at least ZA_INDEXEDBY and
+ZA_WIPE - anything else?"). Diffing plugin 0.2.1 (synced 2026-08-31) against baron
+0.4.0.0 turned up five language changes, not two:
+
+- ZA_WIPE + ZA_INDEXEDBY: data.ts DIRECTIVES, parseDirective (wipe joins the
+  bare-marker group, indexedby the expr-list group), the za-directives grammar rule,
+  completions for free via DIRECTIVES.
+- `@name = expr` verbatim assignments (baron 0.2.2-era peek_symbol work): a new '@'
+  arm in parseStatement delegating to a factored parseAssignmentTo (shared with the
+  plain-identifier path), plus an optional `@` in the grammar's assignment rule.
+  TRUE/FALSE/PI stay refused, dotted names skipped.
+- Brace-as-separator: new endsStatement() helper (atStatementEnd || '{') used by
+  skipToStatementEnd, parseInstruction's no-operand and bare-A peeks, and
+  parseMacroArgs - mirroring baron's peek_separator unification. skipToStatementEnd
+  no longer swallows a '{' as a list; the brace is left to open a real scope.
+  GOTCHA: recoverList has a SECOND caller inside parsePrimary's list handling - it
+  stays, for genuinely-started list literals; only the statement-skip use is gone.
+  The "junk cannot open a phantom scope" test asserted the old semantics and flipped:
+  under baron's rule the phantom scope is the real parse.
+- INCSECTION removed everywhere (baron 0.3.0): data.ts, parseDirective, its grammar
+  rules, the section-name completion block, two README lines, the sections test.
+- Nested sections no longer inherit attributes (baron 0.3.0): parseSection's
+  cmos-inheritance default is now plain false, so CMOS-only mnemonics flag inside an
+  attribute-less inner section; new test pins outer TRUE / inner default / outer
+  restored.
+
+Checked and fine as-is: keyword-spelled labels (.next etc. - parseLabel and the
+label-def grammar rule never gated on keyword spellings), the DIAG_RE stderr parse
+(baron's format is still name:line:col: error|warning: message), `baron --check`
+(still present), SECTION_ATTRIBUTES (org/filename/load/exec/cmos/guard unchanged).
+
+30/30 tests, typecheck clean, packaged baron-vsc-0.4.0.vsix. Version 0.2.1 -> 0.4.0
+per Rich, aligning with baron 0.4.0.0 (three-part semver: the marketplace and npm
+refuse a fourth segment, so 0.4.0 IS the aligned spelling; no 0.3.x plugin ever
+shipped).

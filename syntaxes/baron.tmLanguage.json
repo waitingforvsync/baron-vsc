@@ -168,17 +168,6 @@
           }
         },
         {
-          "match": "(?i)\\b(incsection)\\s+([A-Za-z_][A-Za-z0-9_]*)",
-          "captures": {
-            "1": {
-              "name": "keyword.control.directive.baron"
-            },
-            "2": {
-              "name": "entity.name.type.section.baron"
-            }
-          }
-        },
-        {
           "match": "(?i)\\b(for)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": {
@@ -193,11 +182,11 @@
     },
     "za-directives": {
       "name": "support.type.zeropage.baron",
-      "match": "(?i)\\b(za_pool|za_auto1|za_auto2|za_auto|za_unreachable|za_cancall|za_canjump|za_returnto|za_return|za_discard|za_entry|za_interrupt)\\b"
+      "match": "(?i)\\b(za_pool|za_auto1|za_auto2|za_auto|za_unreachable|za_cancall|za_canjump|za_returnto|za_return|za_discard|za_wipe|za_indexedby|za_entry|za_interrupt)\\b"
     },
     "directives": {
       "name": "keyword.control.directive.baron",
-      "match": "(?i)\\b(equb|equs|equw|equd|skipto|skip|align|incbin|include|incsection|section|endsection|if|elif|else|endif|for|next|macro|endmacro|function|print|error|endbasic|basic)\\b"
+      "match": "(?i)\\b(equb|equs|equw|equd|skipto|skip|align|incbin|include|section|endsection|if|elif|else|endif|for|next|macro|endmacro|function|print|error|endbasic|basic)\\b"
     },
     "mnemonics-cmos": {
       "name": "keyword.other.mnemonic.cmos.baron",
@@ -228,9 +217,12 @@
       "name": "variable.parameter.attribute.baron"
     },
     "assignment": {
-      "match": "(?i)^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?==(?!=))",
+      "match": "(?i)^\\s*(@\\s*)?([A-Za-z_][A-Za-z0-9_]*)\\s*(?==(?!=))",
       "captures": {
         "1": {
+          "name": "punctuation.definition.verbatim.baron"
+        },
+        "2": {
           "name": "variable.other.definition.baron"
         }
       }

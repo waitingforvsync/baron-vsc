@@ -351,18 +351,6 @@ export class BaronCompletionProvider implements vscode.CompletionItemProvider {
       items.push(item);
     };
 
-    // After `incsection`: section names.
-    if (/(?:^|:)\s*incsection\s+[A-Za-z_]?\w*$/i.test(linePrefix)) {
-      for (const u of units) {
-        for (const defs of u.sections.values()) {
-          for (const def of defs) {
-            add(def.name, vscode.CompletionItemKind.Module, 'section');
-          }
-        }
-      }
-      return items;
-    }
-
     // On a SECTION line after a comma: attribute names.
     if (/(?:^|:)\s*section\s+\w+\s*,[^=]*$/i.test(linePrefix) && !/=\s*[^,]*$/.test(linePrefix)) {
       for (const attr of SECTION_ATTRIBUTES) {

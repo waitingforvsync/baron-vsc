@@ -31,13 +31,13 @@ reference) understands symbols, labels, named and anonymous scopes, local labels
 expressions including multi-line lists, ranges and subscripts. On top of it:
 
 - **Go to definition** (F12) — works on dotted paths (`wipe.nonzero`), macro calls,
-  `INCSECTION` names, `@-`/`@+`, and `INCLUDE`/`INCBIN` file names.
+  `@-`/`@+`, and `INCLUDE`/`INCBIN` file names.
 - **Find all references** (Shift+F12).
 - **Hover** — the defining line, its scope, doc comments above it, and the evaluated
   value of constant symbols (decimal and hex).
 - **Completion** — keywords, mnemonics, macros at statement start; visible symbols,
-  functions, built-ins in expressions; members after `scope.`; section names after
-  `INCSECTION`; attribute names on `SECTION` lines.
+  functions, built-ins in expressions; members after `scope.`; attribute names on
+  `SECTION` lines.
 - **Outline / breadcrumbs** — sections, scopes, labels, macros, functions, symbols.
 
 Scoping follows baron precisely: labels bind in the enclosing scope, a label immediately

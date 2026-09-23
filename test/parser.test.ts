@@ -219,7 +219,7 @@ test('for variables are scoped to the body', () => {
 
 // ---- sections and cmos ----
 
-test('sections: definition, incsection reference, cmos-aware mnemonics', () => {
+test('sections: definition and cmos-aware mnemonics', () => {
   const src = [
     'SECTION Code, org = &1100, cmos = TRUE',
     'PHX',
@@ -232,7 +232,6 @@ test('sections: definition, incsection reference, cmos-aware mnemonics', () => {
     'JMP (tbl,X)',
     'ENDSECTION',
     'BRA out',
-    'INCSECTION Code',
     '',
   ].join('\n');
   const unit = parse(src);
@@ -251,10 +250,26 @@ test('sections: definition, incsection reference, cmos-aware mnemonics', () => {
   assert.deepEqual(byName('jmp').map((m) => [m.cmosOnly, m.cmosContext]), [[true, true]]);
   // Outside all sections: NMOS.
   assert.deepEqual(byName('bra').map((m) => [m.cmosOnly, m.cmosContext]), [[true, false]]);
+});
 
-  const secRef = index.refs.find((r) => r.kind === 'section');
-  assert.ok(secRef);
-  assert.equal(resolveRef(unit, secRef, 0)[0].kind, 'section');
+test('sections: attributes are not inherited by nested sections', () => {
+  // baron 0.3.0: a nested section without its own cmos attribute targets plain NMOS,
+  // whatever the enclosing section had; the parent's setting returns at ENDSECTION.
+  const src = [
+    'SECTION Outer, cmos = TRUE',
+    'PHX',
+    'SECTION Inner',
+    'STZ &70',
+    'ENDSECTION',
+    'PLX',
+    'ENDSECTION',
+    '',
+  ].join('\n');
+  const index = parse(src).files.get('main.6502')!;
+  const byName = (mn: string) => index.mnemonics.filter((m) => m.mnemonic === mn);
+  assert.deepEqual(byName('phx').map((m) => m.cmosContext), [true]);
+  assert.deepEqual(byName('stz').map((m) => m.cmosContext), [false]);
+  assert.deepEqual(byName('plx').map((m) => m.cmosContext), [true]);
 });
 
 test('nmos indirect modes are not flagged', () => {
@@ -365,11 +380,14 @@ test('a hard terminator inside a broken list stops recovery at the separator', (
   assert.equal(index.defs.find((d) => d.name === 'next')!.scope, unit.globalScope);
 });
 
-test('junk after a statement cannot open a phantom scope', () => {
+test('junk after a statement ends at a brace, which opens a real scope', () => {
+  // baron's brace-as-separator: a '{' met at a statement boundary (during error
+  // recovery included) ends the statement and opens a scope - `EQUB 1 {2, 3}` is a
+  // malformed EQUB, then a scope holding `2, 3`.
   const src = 'EQUB 1 ?? {2, 3}\n.after\nsym = 4\n';
   const unit = parse(src);
   const index = unit.files.get('main.6502')!;
-  assert.equal(unit.globalScope.children.length, 0); // the {2, 3} was skipped as a list
+  assert.equal(unit.globalScope.children.length, 1); // the brace opened (and '}' closed) a scope
   assert.equal(index.defs.find((d) => d.name === 'after')!.scope, unit.globalScope);
   assert.equal(evalConst(unit.globalScope.lookupLocal('sym')![0].valueExpr), 4);
 });
@@ -449,4 +467,54 @@ test('starglobe demo parses without derailing', () => {
   assert.ok(unit.sections.size >= 1);
   // Every recorded mnemonic should be flagged NMOS-legal (the demo targets a stock Beeb).
   assert.ok(index.mnemonics.every((m) => !m.cmosOnly));
+});
+
+// ---- 0.4.0: new keywords and brace-as-separator ----
+
+test('za_wipe and za_indexedby parse as directives', () => {
+  const src = [
+    'ZA_POOL &70..&7F',
+    'ZA_AUTO 4, table',
+    'LDA table,X',
+    'ZA_INDEXEDBY 0..3',
+    'ZA_WIPE',
+    '.after RTS',
+    '',
+  ].join('\n');
+  const index = parse(src).files.get('main.6502')!;
+  // Both keywords consume cleanly and parsing carries on past them.
+  assert.ok(index.defs.some((d) => d.name === 'after' && d.kind === 'label'));
+  assert.ok(index.defs.some((d) => d.name === 'table' && d.kind === 'zpvar'));
+  assert.ok(index.mnemonics.some((m) => m.mnemonic === 'rts'));
+});
+
+test('verbatim assignment binds keyword-spelled names', () => {
+  const index = parse('@next = 5\n@foo = 2\nLDA #next\n').files.get('main.6502')!;
+  const next = index.defs.find((d) => d.name === 'next');
+  assert.ok(next);
+  assert.equal(next.kind, 'symbol');
+  const foo = index.defs.find((d) => d.name === 'foo');
+  assert.ok(foo);
+  assert.equal(foo.kind, 'symbol');
+});
+
+test('a brace ends the statement before it', () => {
+  const src = [
+    'LDX #8 {',
+    '.here RTS',
+    '}',
+    'DEX {',
+    '.two RTS',
+    '}',
+    'ASL A { .three RTS }',
+    'mymacro 7 { .four RTS }',
+    '',
+  ].join('\n');
+  const index = parse(src).files.get('main.6502')!;
+  for (const name of ['here', 'two', 'three', 'four']) {
+    assert.ok(index.defs.some((d) => d.name === name && d.kind === 'label'), name);
+  }
+  // The braces opened real scopes, and the instructions before them still recorded.
+  assert.ok(index.mnemonics.some((m) => m.mnemonic === 'dex'));
+  assert.ok(index.mnemonics.some((m) => m.mnemonic === 'asl'));
 });

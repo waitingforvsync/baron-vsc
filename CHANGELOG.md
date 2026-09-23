@@ -1,5 +1,24 @@
 # Changelog #
 
+## 0.4.0 (2026-09-23) ##
+
+Version aligned with baron 0.4.0.0 (there was no 0.3.x plugin release; baron 0.3.0's
+sections redesign and the 0.4.0 keywords land here together).
+
+- New allocator keywords: `ZA_WIPE` (placed after a zero-page wipe loop, blesses the
+  sweep) and `ZA_INDEXEDBY` (declares an indexed access's index set - takes a value
+  list). Both highlight in the `ZA_` category and complete at statement start.
+- Verbatim assignments recognised: `@next = 5` binds `next` even when the name spells a
+  keyword or mnemonic - highlighted, parsed and indexed as a symbol definition.
+- A `{` now ends the statement before it, as in baron: `LDX #8 {`, `DEX {`, `ASL A {`
+  and `mymacro 7 { ... }` all open a scope after the statement, and the parser's scope
+  tracking follows.
+- `INCSECTION` removed (baron 0.3.0 dropped it): no longer highlighted, parsed or
+  completed.
+- Nested `SECTION`s no longer inherit attributes (baron 0.3.0): a section without its
+  own `cmos = TRUE` targets plain NMOS, so CMOS-only mnemonics inside it are flagged
+  even under a CMOS-enabled outer section.
+
 ## 0.2.1 (2026-08-31) ##
 
 - Brackets inside comments and strings are no longer rainbow-coloured by the

@@ -149,29 +149,34 @@ class FileParser {
     return tok.kind === TokKind.Eof || tok.kind === TokKind.Terminator || this.isPunct(tok, '}');
   }
 
-  /** Error recovery: consume to the next separator. The lexer already hides comments,
-   *  strings and char literals, so none of those can fake one. A '{' met while skipping
-   *  is a LIST brace (we are in expression territory, where '{' always opens a list),
-   *  so it is consumed through its balanced close - newlines inside a list are soft.
-   *  A bare '}' is a scope close and stops the skip, as does a terminator or EOF. */
+  /** A statement boundary as baron's peek_separator sees it: a separator, a closing '}',
+   *  or an OPENING '{' - a brace implicitly ends the statement before it and opens a
+   *  scope (`LDX #8 {` is a statement, then a brace). Used wherever a statement may end
+   *  without an explicit separator; the '{'-as-list reading only exists in OPERAND
+   *  position, where the expression parser has already consumed it. */
+  private endsStatement(tok: Token): boolean {
+    return this.atStatementEnd(tok) || this.isPunct(tok, '{');
+  }
+
+  /** Error recovery: consume to the next statement boundary. The lexer already hides
+   *  comments, strings and char literals, so none of those can fake one. A '{' stops the
+   *  skip and is left in place - like baron, the brace ends the statement and opens a
+   *  scope (`EQUB 1 {2,3}` is a malformed EQUB, then a scope holding `2,3`). */
   private skipToStatementEnd(): void {
     for (;;) {
       const tok = this.peek();
-      if (this.atStatementEnd(tok)) {
+      if (this.endsStatement(tok)) {
         return;
       }
       this.next();
-      if (this.isPunct(tok, '{')) {
-        this.recoverList();
-      }
     }
   }
 
-  /** Error recovery inside a list literal, entered just past a '{' whose contents went
-   *  wrong: consume through the balanced '}' tracking nesting, treating newline-only
-   *  terminators as whitespace (lists span lines). A hard terminator (one with a ':' in
-   *  it) stops the recovery and is left in place - baron's lexer leaves it for the
-   *  statement loop too, which is how an unclosed list gets reported there. */
+  /** Error recovery inside a list literal, entered just past a '{' the EXPRESSION parser
+   *  opened whose contents went wrong: consume through the balanced '}' tracking nesting,
+   *  treating newline-only terminators as whitespace (lists span lines). A hard terminator
+   *  (one with a ':' in it) stops the recovery and is left in place - baron's lexer leaves
+   *  it for the statement loop too, which is how an unclosed list gets reported there. */
   private recoverList(): void {
     let depth = 1;
     for (;;) {
@@ -276,6 +281,24 @@ class FileParser {
         this.skipToStatementEnd();
         return;
       }
+      if (tok.lower === '@') {
+        // Verbatim assignment `@name = expr` (the C# idiom): binds `name` even when it
+        // spells a keyword or mnemonic - the '@' is syntax, not part of the name.
+        // TRUE/FALSE/PI stay refused (baron's reserved constants).
+        this.next();
+        const name = this.peek();
+        if (name.kind === TokKind.Ident && !name.text.includes('.')
+            && !RESERVED_CONSTANTS.has(name.lower)) {
+          this.next();
+          if (this.isPunct(this.peek(), '=')) {
+            this.next();
+            this.parseAssignmentTo(name);
+            return;
+          }
+        }
+        this.skipToStatementEnd();
+        return;
+      }
       this.next();
       return;
     }
@@ -322,23 +345,28 @@ class FileParser {
         this.skipToStatementEnd();
         return;
       }
-      const def = this.define('symbol', tok, this.scope);
-      const rhsStart = this.lx.getPos();
-      def.valueExpr = this.parseExpr() ?? undefined;
-      this.skipToStatementEnd();
-      const rhsEnd = this.lx.getPos();
-      def.detail = '= ' + this.index.text.slice(rhsStart, Math.min(rhsEnd, rhsStart + 60)).trim();
-      // In a function body an assignment is a local; elsewhere it's an ordinary symbol.
-      this.outlineAdd({
-        name: tok.text, kind: 'symbol', loc: def.loc, fullLoc: def.loc,
-        detail: def.detail, children: [],
-      });
+      this.parseAssignmentTo(tok);
       return;
     }
 
     // Macro invocation (or a macro not yet defined - record it anyway).
     this.recordIdentRef(tok, 'macrocall');
     this.parseMacroArgs();
+  }
+
+  /** The body of `name = expr` / `@name = expr`, entered just past the '='. */
+  private parseAssignmentTo(tok: Token): void {
+    const def = this.define('symbol', tok, this.scope);
+    const rhsStart = this.lx.getPos();
+    def.valueExpr = this.parseExpr() ?? undefined;
+    this.skipToStatementEnd();
+    const rhsEnd = this.lx.getPos();
+    def.detail = '= ' + this.index.text.slice(rhsStart, Math.min(rhsEnd, rhsStart + 60)).trim();
+    // In a function body an assignment is a local; elsewhere it's an ordinary symbol.
+    this.outlineAdd({
+      name: tok.text, kind: 'symbol', loc: def.loc, fullLoc: def.loc,
+      detail: def.detail, children: [],
+    });
   }
 
   private parseCloser(tok: Token): void {
@@ -481,7 +509,7 @@ class FileParser {
     switch (tok.lower) {
       case 'equb': case 'equs': case 'equw': case 'equd':
       case 'za_cancall': case 'za_canjump': case 'za_returnto':
-      case 'za_pool': case 'za_discard':
+      case 'za_pool': case 'za_discard': case 'za_indexedby':
         this.parseExprList();
         break;
       case 'skip': case 'skipto': case 'align': case 'if':
@@ -510,14 +538,6 @@ class FileParser {
       case 'include': case 'incbin':
         this.parseInclude(tok.lower);
         break;
-      case 'incsection': {
-        const name = this.peek();
-        if (name.kind === TokKind.Ident) {
-          this.next();
-          this.recordIdentRef(name, 'section');
-        }
-        break;
-      }
       case 'section':
         this.parseSection(tok);
         break;
@@ -550,7 +570,7 @@ class FileParser {
         break;
       }
       case 'za_unreachable': case 'za_entry': case 'za_interrupt':
-      case 'za_return':
+      case 'za_return': case 'za_wipe':
         break;
       default:
         this.skipToStatementEnd();
@@ -601,7 +621,7 @@ class FileParser {
     const def = this.define('section', name, this.scope);
     this.up.addGlobal(this.up.unit.sections, def);
 
-    const prevCmos = this.cmos; // nested sections inherit attributes (assemble.c)
+    const prevCmos = this.cmos; // restored at ENDSECTION
     let cmosSeen = false;
 
     const attrs: string[] = [];
@@ -627,7 +647,9 @@ class FileParser {
       }
     }
     if (!cmosSeen) {
-      this.cmos = prevCmos;
+      // Attributes are not inherited (baron 0.3.0): a section without its own cmos
+      // attribute targets plain NMOS, whatever the enclosing section had.
+      this.cmos = false;
     }
 
     const node: OutlineNode = {
@@ -861,8 +883,8 @@ class FileParser {
     let cmosOnly = CMOS_ONLY_MNEMONICS.has(lower);
 
     const tok = this.peek();
-    if (this.atStatementEnd(tok)) {
-      // implied / accumulator, nothing to parse
+    if (this.endsStatement(tok)) {
+      // implied / accumulator, nothing to parse ('{' counts: `DEX {` ends at the brace)
     } else if (this.isPunct(tok, '#')) {
       this.next();
       this.parseExpr();
@@ -902,7 +924,7 @@ class FileParser {
       // Bare A counts as the accumulator only when nothing but a terminator (or '}') follows.
       const save = this.lx.getPos();
       this.next();
-      if (this.atStatementEnd(this.peek())) {
+      if (this.endsStatement(this.peek())) {
         if (lower === 'inc' || lower === 'dec') {
           cmosOnly = true; // INC A / DEC A are 65C02-only (0x1A/0x3A | cmos)
         }
@@ -947,8 +969,8 @@ class FileParser {
     // they can start so their references are collected, and skip everything else.
     for (;;) {
       const tok = this.peek();
-      if (this.atStatementEnd(tok)) {
-        break;
+      if (this.endsStatement(tok)) {
+        break; // '{' ends the args too: `mymacro 7 { ... }` calls, then opens a scope
       }
       if (this.canStartExpr(tok)) {
         const before = this.lx.getPos();
