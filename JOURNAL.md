@@ -379,3 +379,17 @@ label-def grammar rule never gated on keyword spellings), the DIAG_RE stderr par
 per Rich, aligning with baron 0.4.0.0 (three-part semver: the marketplace and npm
 refuse a fourth segment, so 0.4.0 IS the aligned spelling; no 0.3.x plugin ever
 shipped).
+
+## 2026-09-24: 0.4.1 - the shadow copy honours the document's encoding ##
+
+Baron issue #8's side complaint, confirmed real: prepareMirror wrote dirty buffers with
+fs.writeFileSync(dest, doc.getText()) - a string write is always UTF-8 - so a Latin-1 source's
+one-byte &9A became C2 9A in the shadow tree and check-on-type disagreed with baron-on-disk.
+Fix: doc.encoding + vscode.workspace.encode (the 1.100 encoding API; @types 1.125 already has
+it) with a typeof feature-guard so the ^1.85 engine floor stands - older hosts keep the UTF-8
+write, exact for UTF-8 buffers. encode() is async, so prepareMirror and runCheck went async;
+the check GENERATION is now claimed before the mirror and re-checked after the await, else a
+check superseded mid-mirror would kill its successor's process (all runCheck callers are
+fire-and-forget, so the signature change ripples nowhere). utf8bom stays faithful for free -
+encode re-adds the BOM, matching the bytes baron sees in the real file. Typecheck + 30/30 +
+packaged baron-vsc-0.4.1.vsix.

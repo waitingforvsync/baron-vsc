@@ -1,5 +1,14 @@
 # Changelog #
 
+## 0.4.1 (2026-09-24) ##
+
+- The check-on-type shadow copy now preserves the document's own encoding. It was
+  always written as UTF-8, so a Latin-1/Windows-1252 source with high-bit bytes in a
+  string literal (custom glyphs, say) turned each of them into a two-byte sequence -
+  and the extension reported errors that running baron on the saved file did not
+  (baron issue #8). Uses the VS Code encoding API (1.100+); older hosts keep the old
+  behaviour, which is exact for UTF-8 buffers.
+
 ## 0.4.0 (2026-09-23) ##
 
 Version aligned with baron 0.4.0.0 (there was no 0.3.x plugin release; baron 0.3.0's

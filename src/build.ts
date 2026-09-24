@@ -87,7 +87,7 @@ export class BaronBuild {
    *  editor buffers written out and clean files hardlinked (copied on failure), so a
    *  check can see unsaved edits. Returns the shadow root, or undefined when mirroring
    *  is not possible (a file lives outside the workspace folder). */
-  private prepareMirror(wsRoot: string, files: Set<string>): string | undefined {
+  private async prepareMirror(wsRoot: string, files: Set<string>): Promise<string | undefined> {
     const dir = path.join(
       os.tmpdir(),
       'baron-vsc-check-' + crypto.createHash('md5').update(wsRoot).digest('hex').slice(0, 12),
@@ -104,7 +104,17 @@ export class BaronBuild {
         fs.rmSync(dest, { force: true });
         const doc = vscode.workspace.textDocuments.find((d) => docFile(d) === file);
         if (doc) {
-          fs.writeFileSync(dest, doc.getText());
+          // Write the buffer back in the document's OWN encoding. A plain string write
+          // is always UTF-8, which silently re-encoded Latin-1/Windows-1252 sources: a
+          // one-byte &9A in a string literal became two bytes in the shadow copy, so the
+          // check saw a different program than baron sees on the saved file (issue
+          // baron#8). The encoding API arrived in VS Code 1.100; on older hosts we keep
+          // the old UTF-8 write, which is exact for UTF-8 buffers.
+          if (typeof vscode.workspace.encode === 'function' && doc.encoding) {
+            fs.writeFileSync(dest, await vscode.workspace.encode(doc.getText(), { encoding: doc.encoding }));
+          } else {
+            fs.writeFileSync(dest, doc.getText());
+          }
         } else {
           try {
             fs.linkSync(file, dest);
@@ -125,7 +135,7 @@ export class BaronBuild {
    *  a build) starts while one is in flight, the old process is killed and its results
    *  discarded - the newest run always wins. Unsaved edits are included by mirroring
    *  the involved files into a shadow tree and running the check there. */
-  runCheck(): void {
+  async runCheck(): Promise<void> {
     if (this.running) {
       return; // a real build is in flight; it will publish fresh diagnostics itself
     }
@@ -140,15 +150,20 @@ export class BaronBuild {
     const args = ['--check', ...this.effectiveArgs(config, config.get<string[]>('buildArgs') ?? []), ...sources];
 
     // Check unsaved work: when any involved document is dirty, run against a shadow
-    // copy of the file set with the editor buffers' contents.
+    // copy of the file set with the editor buffers' contents. The generation is claimed
+    // BEFORE the (async) mirror, so a check superseded while mirroring bows out instead
+    // of killing its successor's process.
+    const gen = ++this.generation;
     let cwd = wsRoot;
     const involved = this.project.filesForRoots(sources.map((s) => path.resolve(wsRoot, s)));
     const anyDirty = vscode.workspace.textDocuments.some((d) => d.isDirty && involved.has(docFile(d)));
     if (anyDirty) {
-      cwd = this.prepareMirror(wsRoot, involved) ?? wsRoot;
+      cwd = (await this.prepareMirror(wsRoot, involved)) ?? wsRoot;
+      if (gen !== this.generation) {
+        return; // superseded while mirroring
+      }
     }
 
-    const gen = ++this.generation;
     this.checkProc?.kill(); // supersede any in-flight check
     let proc: cp.ChildProcess;
     try {
