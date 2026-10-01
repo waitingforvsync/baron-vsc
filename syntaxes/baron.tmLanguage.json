@@ -186,7 +186,7 @@
     },
     "directives": {
       "name": "keyword.control.directive.baron",
-      "match": "(?i)\\b(equb|equs|equw|equd|skipto|skip|align|incbin|include|section|endsection|if|elif|else|endif|for|next|macro|endmacro|function|print|error|endbasic|basic)\\b"
+      "match": "(?i)\\b(equb|equs|equw|equd|skipto|skip|align|incbin|include|section|endsection|if|elif|else|endif|for|next|macro|endmacro|function|print|error|assert|endbasic|basic)\\b"
     },
     "mnemonics-cmos": {
       "name": "keyword.other.mnemonic.cmos.baron",

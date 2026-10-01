@@ -30,7 +30,7 @@ export const DIRECTIVES = new Set([
   'za_auto2', 'za_unreachable', 'za_cancall', 'za_canjump', 'za_return',
   'za_returnto', 'za_discard', 'za_wipe', 'za_indexedby', 'za_entry',
   'za_interrupt', 'equb', 'equs', 'equw', 'equd', 'if', 'for', 'include',
-  'incbin', 'basic', 'macro', 'function', 'print', 'error',
+  'incbin', 'basic', 'macro', 'function', 'print', 'error', 'assert',
 ]);
 
 /** Block closers. */

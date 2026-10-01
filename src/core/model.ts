@@ -34,7 +34,18 @@ export interface Definition {
   detail?: string;
   /** For symbols: the defining expression, for constant evaluation. */
   valueExpr?: Expr;
+  /** For macros: the signature slots, for matching invocations against overloads. */
+  macroSlots?: MacroSlot[];
+  /** For functions: the parameter count (overloads are by arity). */
+  arity?: number;
 }
+
+/** One slot of a macro signature (assemble.c handle_macro): a parameter takes an
+ *  expression, a comma is its own slot, a quoted literal must appear verbatim. */
+export type MacroSlot =
+  | { t: 'param' }
+  | { t: 'comma' }
+  | { t: 'lit'; text: string };
 
 export class Scope {
   parent: Scope | undefined;
@@ -90,7 +101,11 @@ export type Expr =
 export interface Reference {
   parts: { name: string; loc: Loc }[];
   scope: Scope;
-  kind: 'value' | 'macrocall' | 'section';
+  kind: 'value' | 'macrocall' | 'funccall' | 'section';
+  /** For macro and function calls: the overload the call matches where it stands -
+   *  defined earlier in the unit (both are define-before-use) and fitting the call's
+   *  shape (macro signature / function arity). Unset when baron would reject the call. */
+  matched?: Definition;
 }
 
 /** A reference to @- or @+ . */

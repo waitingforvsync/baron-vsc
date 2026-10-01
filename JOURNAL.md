@@ -393,3 +393,88 @@ check superseded mid-mirror would kill its successor's process (all runCheck cal
 fire-and-forget, so the signature change ripples nowhere). utf8bom stays faithful for free -
 encode re-adds the BOM, matching the bytes baron sees in the real file. Typecheck + 30/30 +
 packaged baron-vsc-0.4.1.vsix.
+
+## 2026-10-01: 0.4.2 - ASSERT, call navigation and call colouring ##
+
+Rich asked for three things: the new ASSERT keyword, F12 on macro and function
+invocations, and colouring those invocations so a correct call shows at a glance.
+
+### Verified in source (baron 0.4.2.0) ###
+- **ASSERT** (assemble.c handle_assert, expression.c interpret_assert): `ASSERT cond
+  [, value...]` = `IF NOT(cond) : ERROR value... : ENDIF`; the message is ERROR's value
+  list, evaluated only on failure. Also a FUNCTION body statement (the body token table
+  gained `assert` beside if/elif/else/endif), where a failure becomes the call's result.
+  It is the only language addition since the 0.4.0 sync (checked the git log and the
+  reference.md diff). Added to DIRECTIVES, parseDirective (cond + message =
+  parseExprList) and the grammar's directives rule.
+- **Macros are their own namespace.** Macro names go in the statement token table
+  (macros_statement_tokens), so at statement start a defined macro's name lexes as the
+  macro whatever symbols share it, and whatever follows (even `=`). They are never
+  symbols.
+- **Functions are their own namespace too.** functions_index_for_name interns the
+  operand token `name(`, with the paren baked in like every builtin. So `f(` is a call
+  even beside a symbol `f`, and `f (x)` (with a space) is not a call at all ("Expected
+  a newline or ':'").
+- Both are **define-before-use**: the token tables are rebuilt each pass
+  (macros_reset / functions_reset), so a call above its definition fails ("Expected '='"
+  for a macro, the separator error for a function). The name registers before the body,
+  so self-calls work.
+- **Macro call matching** (handle_macro_invocation / macro_try_match): overloads are tried
+  in macro_signature_before order. At the first slot two signatures differ, a fixed token
+  (literal/comma) beats a parameter. Otherwise the longer one wins, then definition order
+  (stable insertion). A param slot takes one eval'd expression (so a `{...}` list
+  literal), a comma slot takes a comma, and a literal slot lexes against the macro's
+  literal table. Then peek_separator must hold. If no overload fits, the resync runs to
+  the terminator, passing over `{`.
+- **Literal lexing** (lexer.c lexer_next, token.c token_table_find): strings, numbers,
+  `&`/`$`/`%`, char literals, commas and terminators lex intrinsically first. Then the
+  longest table entry matches case-insensitively, and an identifier starting there wins
+  if it is LONGER than the match (so a literal "X" does not match `xy`).
+- FUNCTION breadcrumbs (baron fd63a0d) print as plain `error: Note: Called from here`
+  lines at the call site, so DIAG_RE already picks them up. No change needed.
+
+### The F12 bug ###
+It was not that calls were never resolved. Probing every macro/function call in portalc
+and the baron examples showed resolveRef walking the SCOPE CHAIN first for a macrocall.
+macros and functions were define()d into scope.symbols, so in portalc's test/s2.6502
+`OUT 0` and `CALL x` resolved to the `.out` / `.call` labels in the same scope. Fixes:
+- define() takes `bind = false` for macros and functions: they go into index.defs and
+  unit.macros / unit.functions only, never the symbol table.
+- resolveRef: a macrocall / funccall returns `ref.matched` (the overload the call fits),
+  else every overload of the name. Value refs no longer fall back to functions/macros
+  (sections only), so a bare `trap` no longer also finds the TRAP macro.
+- New Reference kind `funccall`, recorded in parsePrimary only for an ident with `(`
+  hard against it (paren.start === tok.end) and not dotted. `f (x)` stays a value ref.
+
+### Signature-aware macro calls (a second bug found by the probe) ###
+`palette {black, ...}` (baron's spritescale example) was split at the `{` by the 0.4.0
+brace-as-separator rule. That opened a phantom scope and read `black` as a macro call.
+parseMacroCall now mirrors macro_try_match. It orders the overloads as above, then
+trial-parses each with mark()/rewind(), restoring lexer position and truncating
+refs/localRefs, since an expression parse records references as a side effect. A known
+macro with no fitting overload is consumed with `{` read as a list (baron's resync passes
+over it). An undefined name keeps the old rule where `{` ends the statement (baron's
+parse is a syntax error there anyway, so no faithful recovery exists). parseMacro now
+records `macroSlots`, parseFunction `arity`, and parseCallArgs returns the argument count.
+
+### Colouring ###
+Semantic token types `macroCall` (superType macro) and `functionCall` (superType
+function) are mapped to the scopes the definition names already use
+(entity.name.function.macro.baron / entity.name.function.baron), so a call matches its
+definition's colour. A call is coloured only when `matched` is set: defined earlier in
+unit parse order, with an overload that fits. So a misspelt, misordered or mis-shaped
+call stays plain. Calls usually live in a different file from their macros (portalc's
+arith.6502), so the provider now fires onDidChangeSemanticTokens 300ms after any edit
+in the unit, and when baron.sourceFiles changes.
+
+### Verification ###
+- Differential dump (every ref's resolution, defs, mnemonics, local refs) between HEAD
+  and the new parser over portalc (portal/harness/boot) and all four baron examples.
+  The only changes are the intended OUT/CALL/ASSERT/trap ones.
+- All 172 calls in portalc and 64 in spritescale match an overload.
+- Every new test's premise was checked with baron 0.4.2.0 --check first: the overload
+  and literal rules, `xy` beating literal X, list args, a brace after the last slot,
+  `f` symbol beside function `f`, `f (1)` rejected, use-before-define rejected, OUT
+  beside .out, ASSERT in both forms, and macro self-recursion.
+- 37/37 tests, typecheck clean, packaged baron-vsc-0.4.2.vsix.
+- Also corrected a stale README line that still said nested sections inherit `cmos`.

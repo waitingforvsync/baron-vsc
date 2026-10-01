@@ -39,15 +39,21 @@ export function findAt(index: FileIndex, offset: number): Found | undefined {
  *  a parent-chain lookup, subsequent parts descend named scopes. */
 export function resolveRef(unit: Unit, ref: Reference, partIndex: number): Definition[] {
   const headLower = ref.parts[0].name.toLowerCase();
+
+  // Macros and functions are their own namespaces, never symbols: a statement-start name
+  // lexes as a macro, and `name(` as a function call, whatever symbols share the name
+  // (assemble.c statement_tokens / functions.c operand tokens). The overload the call
+  // matched is the precise answer; failing that, every overload of the name.
+  if (ref.kind === 'macrocall' || ref.kind === 'funccall') {
+    if (ref.matched) {
+      return [ref.matched];
+    }
+    return (ref.kind === 'macrocall' ? unit.macros : unit.functions).get(headLower) ?? [];
+  }
+
   let defs: Definition[] | undefined = ref.scope.lookupChain(headLower);
   if (!defs || defs.length === 0) {
-    if (ref.kind === 'section') {
-      defs = unit.sections.get(headLower);
-    } else if (ref.kind === 'macrocall') {
-      defs = unit.macros.get(headLower);
-    } else {
-      defs = unit.functions.get(headLower) ?? unit.macros.get(headLower) ?? unit.sections.get(headLower);
-    }
+    defs = unit.sections.get(headLower);
   }
   if (!defs) {
     return [];

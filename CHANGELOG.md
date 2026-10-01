@@ -1,5 +1,25 @@
 # Changelog #
 
+## 0.4.2 (2026-10-01) ##
+
+- `ASSERT cond [, message...]` (baron 0.4.1): highlighted as a directive, completed at
+  statement start, and parsed both as a statement and inside a `FUNCTION` body. It was
+  previously misread as a call to an undefined macro.
+- Go to definition (and hover / find references) on a macro invocation or a function
+  call now goes to the macro or function, and to the specific overload the call
+  matches. Macros and functions are now kept in their own namespaces as baron keeps
+  them, so `OUT 0` next to a `.out` label no longer jumps to the label, and a symbol
+  reference no longer resolves to a macro that shares its name.
+- Macro and function calls are coloured (semantic token types `macroCall` /
+  `functionCall`) when baron would accept them: defined earlier, with an overload that
+  fits. Anything else stays plain, so a bad call stands out.
+- Macro invocations are matched against the macro's signatures the way baron matches
+  them, so a list literal argument (`palette {black, red}`) is an argument, not a
+  scope, and its contents are no longer misread as statements. A `{` after the last
+  argument still opens a scope.
+- A function call is recognised only with its `(` directly after the name, as in baron;
+  `f (x)` is a reference to the symbol `f`.
+
 ## 0.4.1 (2026-09-24) ##
 
 - The check-on-type shadow copy now preserves the document's own encoding. It was

@@ -166,7 +166,10 @@ test('macros: definition, params, overloads, invocation reference', () => {
   const index = unit.files.get('main.6502')!;
   const call = index.refs.find((r) => r.kind === 'macrocall');
   assert.ok(call);
-  assert.equal(resolveRef(unit, call, 0).length, 2);
+  // `ADD &70` has no '#', so only the plain overload fits - and that is where it resolves.
+  const target = resolveRef(unit, call, 0);
+  assert.equal(target.length, 1);
+  assert.equal(target[0].detail, 'n');
   // The param `n` is visible inside the body.
   const nRef = index.refs.find((r) => r.parts[0].name === 'n');
   assert.ok(nRef);
@@ -517,4 +520,162 @@ test('a brace ends the statement before it', () => {
   // The braces opened real scopes, and the instructions before them still recorded.
   assert.ok(index.mnemonics.some((m) => m.mnemonic === 'dex'));
   assert.ok(index.mnemonics.some((m) => m.mnemonic === 'asl'));
+});
+
+// ---- 0.4.2: ASSERT, macro / function call matching ----
+
+function calls(unit: Unit) {
+  return unit.files.get('main.6502')!.refs.filter((r) => r.kind === 'macrocall' || r.kind === 'funccall');
+}
+
+test('ASSERT parses as a statement and as a function body statement', () => {
+  const src = [
+    'size = 3',
+    'ASSERT size < 10, "size is ", size',
+    'ASSERT * <= &3000',
+    'FUNCTION checked(w)',
+    '    ASSERT w >= 0, "bad width: ", w',
+    '= w * 2',
+    'EQUB checked(4)',
+    '.after',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  // Not mistaken for a macro call, and its condition / message references are collected.
+  assert.ok(!index.refs.some((r) => r.parts[0].name.toLowerCase() === 'assert'));
+  assert.equal(index.refs.filter((r) => r.parts[0].name === 'size').length, 2);
+  // The body's ASSERT sees the parameter, and the function still closes at its return.
+  const w = index.refs.find((r) => r.parts[0].name === 'w')!;
+  assert.equal(resolveRef(unit, w, 0)[0].kind, 'param');
+  assert.equal(index.defs.find((d) => d.name === 'after')!.scope, unit.globalScope);
+  assert.equal(calls(unit)[0].matched?.name, 'checked');
+});
+
+test('macro calls resolve to the macro, never a same-named label', () => {
+  const src = [
+    'MACRO OUT n',
+    '    STA &70 + n',
+    'ENDMACRO',
+    '.routine',
+    '{',
+    '    BMI out',
+    '.out',
+    '    OUT 0',
+    '}',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  const call = index.refs.find((r) => r.kind === 'macrocall')!;
+  assert.equal(call.parts[0].name, 'OUT');
+  assert.deepEqual(resolveRef(unit, call, 0).map((d) => d.kind), ['macro']);
+  // ...and the branch target is the label, not the macro.
+  const branch = index.refs.find((r) => r.kind === 'value' && r.parts[0].name === 'out')!;
+  assert.deepEqual(resolveRef(unit, branch, 0).map((d) => d.kind), ['label']);
+});
+
+test('macro overloads match by shape, literals first', () => {
+  const src = [
+    'MACRO LD n : LDA n : ENDMACRO',
+    'MACRO LD "#" n : LDA #n : ENDMACRO',
+    'MACRO LD n, "X" : LDA n,X : ENDMACRO',
+    'LD #5',
+    'LD &70',
+    'LD &70, x',
+    'LD &70, xy',
+    '',
+  ].join('\n');
+  const [imm, zp, indexed, bad] = calls(parse(src));
+  assert.equal(imm.matched?.detail, '"#" n');
+  assert.equal(zp.matched?.detail, 'n');
+  assert.equal(indexed.matched?.detail, 'n, "X"');
+  // `xy` is an identifier longer than the X literal, so nothing fits.
+  assert.equal(bad.matched, undefined);
+});
+
+test('a list literal is a macro argument; a brace after the last slot opens a scope', () => {
+  const src = [
+    'black = 0 : red = 1',
+    'MACRO palette cols',
+    '    EQUB cols',
+    'ENDMACRO',
+    'palette {black, red}',
+    'MACRO mymacro n : EQUB n : ENDMACRO',
+    'mymacro 7 { .four RTS }',
+    '.after',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  const [palette, mymacro] = calls(unit);
+  assert.equal(palette.matched?.name, 'palette');
+  assert.equal(mymacro.matched?.name, 'mymacro');
+  // The list's names are value references, not misread as statements.
+  assert.equal(resolveRef(unit, index.refs.find((r) => r.parts[0].name === 'black')!, 0)[0].kind, 'symbol');
+  // The brace after `mymacro 7` opened a real scope, closed again by `.after`.
+  const four = index.defs.find((d) => d.name === 'four')!;
+  assert.notEqual(four.scope, unit.globalScope);
+  assert.equal(index.defs.find((d) => d.name === 'after')!.scope, unit.globalScope);
+});
+
+test('calls before the definition do not match, but still navigate', () => {
+  const src = [
+    'early 1',
+    'EQUB twice(1)',
+    'MACRO early n : EQUB n : ENDMACRO',
+    'FUNCTION twice(x) = x * 2',
+    'early 1',
+    'EQUB twice(1)',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const [m1, f1, m2, f2] = calls(unit);
+  assert.equal(m1.matched, undefined);
+  assert.equal(f1.matched, undefined);
+  assert.equal(resolveRef(unit, m1, 0)[0].kind, 'macro');
+  assert.equal(resolveRef(unit, f1, 0)[0].kind, 'function');
+  assert.ok(m2.matched);
+  assert.ok(f2.matched);
+});
+
+test('function calls: own namespace, arity overloads, paren hard against the name', () => {
+  const src = [
+    'FUNCTION f(x) = x',
+    'FUNCTION f(x, y) = x + y',
+    'f = 7',
+    'EQUB f(1), f(1, 2), f(1, 2, 3), f()',
+    'EQUB f',
+    'EQUB f (1)',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  const [one, two, three, none] = calls(unit);
+  assert.equal(one.matched?.detail, '(x)');
+  assert.equal(two.matched?.detail, '(x, y)');
+  assert.equal(three.matched, undefined);
+  assert.equal(none.matched, undefined);
+  assert.equal(resolveRef(unit, three, 0).length, 2); // no fit: every overload
+  // A bare `f`, or `f` with a space before the paren, is the symbol.
+  const values = index.refs.filter((r) => r.kind === 'value' && r.parts[0].name === 'f');
+  assert.equal(values.length, 2);
+  for (const v of values) {
+    assert.deepEqual(resolveRef(unit, v, 0).map((d) => d.kind), ['symbol']);
+  }
+});
+
+test('a self-call inside a macro body matches', () => {
+  const src = [
+    'MACRO countdown n',
+    '    IF n > 0',
+    '        countdown n - 1',
+    '    ENDIF',
+    'ENDMACRO',
+    'countdown 3',
+    '',
+  ].join('\n');
+  const [inner, outer] = calls(parse(src));
+  assert.equal(inner.matched?.name, 'countdown');
+  assert.equal(outer.matched?.name, 'countdown');
 });

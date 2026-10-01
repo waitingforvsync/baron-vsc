@@ -448,12 +448,24 @@ function completionKind(def: Definition): vscode.CompletionItemKind {
   }
 }
 
-// ---- semantic tokens: cmos-aware mnemonic colouring ----
+// ---- semantic tokens: cmos-aware mnemonics, and macro / function calls ----
 
-export const SEMANTIC_LEGEND = new vscode.SemanticTokensLegend(['mnemonicCmos', 'mnemonicInvalid']);
+export const SEMANTIC_LEGEND = new vscode.SemanticTokensLegend([
+  'mnemonicCmos', 'mnemonicInvalid', 'macroCall', 'functionCall',
+]);
 
 export class BaronSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
+  private readonly changed = new vscode.EventEmitter<void>();
+  readonly onDidChangeSemanticTokens = this.changed.event;
+
   constructor(private readonly project: Project) {}
+
+  /** Ask VS Code to re-request every open document's tokens. A call's colour depends on
+   *  definitions that may live in another file, so an edit anywhere in the unit can
+   *  recolour documents that did not change themselves. */
+  refresh(): void {
+    this.changed.fire();
+  }
 
   provideDocumentSemanticTokens(doc: vscode.TextDocument): vscode.SemanticTokens {
     const builder = new vscode.SemanticTokensBuilder(SEMANTIC_LEGEND);
@@ -461,12 +473,23 @@ export class BaronSemanticTokensProvider implements vscode.DocumentSemanticToken
     const [unit] = this.project.unitsForFile(file);
     const index = unit?.files.get(file);
     if (index) {
+      const tokens: { start: number; end: number; type: string }[] = [];
       for (const mn of index.mnemonics) {
-        if (!mn.cmosOnly) {
-          continue;
+        if (mn.cmosOnly) {
+          tokens.push({ ...mn.loc, type: mn.cmosContext ? 'mnemonicCmos' : 'mnemonicInvalid' });
         }
-        const range = toRange(index, mn.loc.start, mn.loc.end);
-        builder.push(range, mn.cmosContext ? 'mnemonicCmos' : 'mnemonicInvalid');
+      }
+      // A call is coloured only when baron would accept it where it stands: defined
+      // earlier, with an overload fitting the call's shape. A misspelt, misordered or
+      // mis-shaped call stays plain, so it stands out at a glance.
+      for (const ref of index.refs) {
+        if (ref.matched && (ref.kind === 'macrocall' || ref.kind === 'funccall')) {
+          tokens.push({ ...ref.parts[0].loc, type: ref.kind === 'macrocall' ? 'macroCall' : 'functionCall' });
+        }
+      }
+      tokens.sort((a, b) => a.start - b.start);
+      for (const t of tokens) {
+        builder.push(toRange(index, t.start, t.end), t.type);
       }
     }
     return builder.build();

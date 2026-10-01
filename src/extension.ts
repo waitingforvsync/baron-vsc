@@ -16,7 +16,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const project = new Project(context);
   const build = new BaronBuild(context, project);
   const selector: vscode.DocumentSelector = { language: 'baron' };
+  const semanticTokens = new BaronSemanticTokensProvider(project);
   let checkTimer: ReturnType<typeof setTimeout> | undefined;
+  let tokensTimer: ReturnType<typeof setTimeout> | undefined;
 
   context.subscriptions.push(
     vscode.languages.registerDefinitionProvider(selector, new BaronDefinitionProvider(project)),
@@ -24,11 +26,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerHoverProvider(selector, new BaronHoverProvider(project)),
     vscode.languages.registerDocumentSymbolProvider(selector, new BaronDocumentSymbolProvider(project)),
     vscode.languages.registerCompletionItemProvider(selector, new BaronCompletionProvider(project), '.'),
-    vscode.languages.registerDocumentSemanticTokensProvider(
-      selector,
-      new BaronSemanticTokensProvider(project),
-      SEMANTIC_LEGEND,
-    ),
+    vscode.languages.registerDocumentSemanticTokensProvider(selector, semanticTokens, SEMANTIC_LEGEND),
 
     vscode.commands.registerCommand('baron.build', () => build.build()),
     vscode.commands.registerCommand('baron.buildWithArgs', () => build.buildWithArgs()),
@@ -144,6 +142,9 @@ export function activate(context: vscode.ExtensionContext): void {
       if (e.document.languageId !== 'baron' && !project.contains(e.document)) {
         return;
       }
+      // Recolour the other open documents too (a definition may have come or gone).
+      clearTimeout(tokensTimer);
+      tokensTimer = setTimeout(() => semanticTokens.refresh(), 300);
       const config = vscode.workspace.getConfiguration('baron', e.document.uri);
       if (config.get<string>('check') !== 'onType') {
         return;
@@ -155,6 +156,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('baron.sourceFiles')) {
         updateContextKey();
+        semanticTokens.refresh(); // the unit boundaries moved
       }
     }),
   );

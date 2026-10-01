@@ -25,6 +25,7 @@ import {
   FileIndex,
   FileProvider,
   Loc,
+  MacroSlot,
   OutlineNode,
   Reference,
   Scope,
@@ -46,6 +47,9 @@ const BINARY_PREC: Record<string, number> = {
 const RIGHT_ASSOC = new Set(['^']);
 
 const ACC_MNEMONICS = new Set(['asl', 'lsr', 'rol', 'ror', 'inc', 'dec']);
+
+/** A dotted identifier run, as lexer.c scan_dotted_identifier reads one. */
+const IDENT_RUN = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/;
 
 interface Block {
   type: 'scope' | 'for' | 'macro' | 'function' | 'section';
@@ -202,7 +206,10 @@ class FileParser {
     }
   }
 
-  private define(kind: DefKind, nameTok: Token, scope: Scope, detail?: string): Definition {
+  /** Record a definition. `bind` false keeps it out of the symbol table: macros and
+   *  functions live in their own namespaces (unit.macros / unit.functions), so a label or
+   *  symbol sharing the name neither shadows nor is shadowed by them. */
+  private define(kind: DefKind, nameTok: Token, scope: Scope, detail?: string, bind = true): Definition {
     const def: Definition = {
       kind,
       name: nameTok.text,
@@ -212,7 +219,9 @@ class FileParser {
       scope,
       detail,
     };
-    scope.define(def);
+    if (bind) {
+      scope.define(def);
+    }
     this.index.defs.push(def);
     return def;
   }
@@ -333,8 +342,16 @@ class FileParser {
       return;
     }
 
-    // Identifier statement: `name = expr` assignment, else a macro invocation.
+    // Identifier statement: a macro invocation if a macro of that name is already defined
+    // (baron appends macro names to the statement token table as it meets them, so the
+    // name lexes as the macro whatever follows), else a `name = expr` assignment, else an
+    // invocation of a macro not (yet) defined - recorded anyway, tolerantly.
     this.next();
+    const known = tok.text.includes('.') ? undefined : this.up.unit.macros.get(tok.lower);
+    if (known) {
+      this.parseMacroCall(tok, known);
+      return;
+    }
     const after = this.peek();
     if (this.isPunct(after, '=')) {
       this.next();
@@ -349,9 +366,7 @@ class FileParser {
       return;
     }
 
-    // Macro invocation (or a macro not yet defined - record it anyway).
-    this.recordIdentRef(tok, 'macrocall');
-    this.parseMacroArgs();
+    this.parseMacroCall(tok, undefined);
   }
 
   /** The body of `name = expr` / `@name = expr`, entered just past the '='. */
@@ -535,6 +550,10 @@ class FileParser {
           this.parseExprList();
         }
         break;
+      case 'assert':
+        // ASSERT cond [, value...]: the condition, then ERROR's message values.
+        this.parseExprList();
+        break;
       case 'include': case 'incbin':
         this.parseInclude(tok.lower);
         break;
@@ -707,11 +726,14 @@ class FileParser {
       return;
     }
     this.next();
-    const def = this.define('macro', name, this.scope);
+    const def = this.define('macro', name, this.scope, undefined, false);
     this.up.addGlobal(this.up.unit.macros, def);
 
     // Signature slots up to the terminator: params, quoted verbatim tokens, commas.
+    // Registered before the body, so a self-call inside it matches (handle_macro).
     const child = new Scope(this.scope);
+    const slots: MacroSlot[] = [];
+    def.macroSlots = slots;
     const sigStart = this.lx.getPos();
     for (;;) {
       const tok = this.peek();
@@ -719,7 +741,12 @@ class FileParser {
         break;
       }
       this.next();
-      if (tok.kind === TokKind.Ident && !tok.text.includes('.')) {
+      if (tok.kind === TokKind.String) {
+        slots.push({ t: 'lit', text: tok.str ?? '' });
+      } else if (this.isPunct(tok, ',')) {
+        slots.push({ t: 'comma' });
+      } else if (tok.kind === TokKind.Ident && !tok.text.includes('.')) {
+        slots.push({ t: 'param' });
         const p: Definition = {
           kind: 'param',
           name: tok.text,
@@ -731,8 +758,7 @@ class FileParser {
         child.define(p);
         this.index.defs.push(p);
       }
-      // Strings are verbatim tokens, commas are their own slot; anything else baron
-      // rejects as unquoted - all just skipped here.
+      // Anything else baron rejects as an unquoted token - just skipped here.
     }
     def.detail = this.index.text.slice(sigStart, this.lx.getPos()).trim();
 
@@ -758,7 +784,7 @@ class FileParser {
       return;
     }
     this.next();
-    const def = this.define('function', name, this.scope);
+    const def = this.define('function', name, this.scope, undefined, false);
     this.up.addGlobal(this.up.unit.functions, def);
 
     const child = new Scope(this.scope);
@@ -792,6 +818,7 @@ class FileParser {
       }
     }
     def.detail = `(${params.join(', ')})`;
+    def.arity = params.length;
 
     const node: OutlineNode = {
       name: name.text,
@@ -962,15 +989,93 @@ class FileParser {
     return undefined;
   }
 
-  // ---- macro invocation arguments ----
+  // ---- macro invocations ----
 
-  private parseMacroArgs(): void {
-    // Slots are expressions, quoted verbatim tokens and commas; parse expressions where
-    // they can start so their references are collected, and skip everything else.
+  /** A macro call, entered just past the name. `overloads` holds the macro's signatures
+   *  as defined so far (macros are define-before-use), or is undefined for a name no MACRO
+   *  has defined yet. Mirrors handle_macro_invocation: the overloads are tried in baron's
+   *  order and the first whose slots all match, ending at a statement boundary, is the
+   *  call - so a parameter slot takes a whole expression, a list literal included
+   *  (`palette {black, red}`), while a '{' after the last slot opens a scope. */
+  private parseMacroCall(name: Token, overloads: Definition[] | undefined): void {
+    const ref = this.recordIdentRef(name, 'macrocall');
+    if (overloads) {
+      const literals = overloads.flatMap((d) => d.macroSlots ?? [])
+        .flatMap((s) => (s.t === 'lit' && s.text !== '' ? [s.text.toLowerCase()] : []));
+      for (const def of overloadOrder(overloads)) {
+        const mark = this.mark();
+        if (this.matchMacroSlots(def.macroSlots ?? [], literals)) {
+          ref.matched = def;
+          return;
+        }
+        this.rewind(mark);
+      }
+    }
+    this.skipMacroArgs(overloads !== undefined);
+  }
+
+  private matchMacroSlots(slots: MacroSlot[], literals: string[]): boolean {
+    for (const slot of slots) {
+      if (slot.t === 'lit') {
+        if (!this.matchLiteral(slot.text.toLowerCase(), literals)) {
+          return false;
+        }
+      } else if (slot.t === 'comma') {
+        if (!this.isPunct(this.peek(), ',')) {
+          return false;
+        }
+        this.next();
+      } else {
+        const before = this.lx.getPos();
+        if (!this.canStartExpr(this.peek()) || (this.parseExpr(), this.lx.getPos() === before)) {
+          return false;
+        }
+      }
+    }
+    return this.endsStatement(this.peek());
+  }
+
+  /** Match a quoted signature literal at the cursor as baron's lexer does against the
+   *  macro's literal table (lexer.c lexer_next, token.c token_table_find): the longest
+   *  literal matching case-insensitively wins, an identifier longer than that match beats
+   *  it, and strings, numbers, char literals, commas and separators lex intrinsically, so
+   *  are never literals. */
+  private matchLiteral(want: string, literals: string[]): boolean {
+    const text = this.index.text;
+    let i = this.lx.getPos();
+    while (i < text.length && (text[i] === ' ' || text[i] === '\t' || text[i] === '\r')) {
+      i++;
+    }
+    if (i >= text.length || '"\'0123456789&$%,:;\\\n'.includes(text[i])) {
+      return false;
+    }
+    let best = '';
+    for (const lit of literals) {
+      if (lit.length > best.length && text.slice(i, i + lit.length).toLowerCase() === lit) {
+        best = lit;
+      }
+    }
+    if (best !== want) {
+      return false;
+    }
+    const ident = IDENT_RUN.exec(text.slice(i, i + 256));
+    if (ident && ident[0].length > best.length) {
+      return false;
+    }
+    this.lx.setPos(i + best.length);
+    return true;
+  }
+
+  /** The arguments of a call no overload fits, or of a name no MACRO has defined:
+   *  consumed tolerantly, collecting the references in any expressions. For a known macro
+   *  baron's resync runs on to the separator, passing over any '{' - read here as a list;
+   *  an undefined name is no call at all, so there a '{' ends the statement and opens a
+   *  scope, as it would after any other statement. */
+  private skipMacroArgs(knownMacro: boolean): void {
     for (;;) {
       const tok = this.peek();
-      if (this.endsStatement(tok)) {
-        break; // '{' ends the args too: `mymacro 7 { ... }` calls, then opens a scope
+      if (knownMacro ? this.atStatementEnd(tok) : this.endsStatement(tok)) {
+        break;
       }
       if (this.canStartExpr(tok)) {
         const before = this.lx.getPos();
@@ -982,6 +1087,17 @@ class FileParser {
         this.next(); // ',', '#', quoted literals, etc.
       }
     }
+  }
+
+  /** Trial parsing: a position to rewind to, with the references recorded so far. */
+  private mark(): { pos: number; refs: number; localRefs: number } {
+    return { pos: this.lx.getPos(), refs: this.index.refs.length, localRefs: this.index.localRefs.length };
+  }
+
+  private rewind(m: { pos: number; refs: number; localRefs: number }): void {
+    this.lx.setPos(m.pos);
+    this.index.refs.length = m.refs;
+    this.index.localRefs.length = m.localRefs;
   }
 
   // ---- expressions ----
@@ -1138,9 +1254,19 @@ class FileParser {
           this.parseCallArgs();
           return { t: 'opaque' };
         }
+        const paren = this.peek();
+        if (this.isPunct(paren, '(') && paren.start === tok.end && !tok.text.includes('.')) {
+          // A user FUNCTION call: baron spells the operand token `name(` (functions.c), so
+          // with the paren hard against the name it is a call, never a symbol. Overloads
+          // are by arity, and only those defined so far count (define-before-use).
+          const call = this.recordIdentRef(tok, 'funccall');
+          const argc = this.parseCallArgs();
+          call.matched = this.up.unit.functions.get(tok.lower)?.find((d) => d.arity === argc);
+          return { t: 'opaque' };
+        }
         const ref = this.recordIdentRef(tok, 'value');
-        if (this.isPunct(this.peek(), '(')) {
-          this.parseCallArgs(); // a user FUNCTION call
+        if (this.isPunct(paren, '(')) {
+          this.parseCallArgs(); // `name (`: no call to baron, but collect the references
           return { t: 'opaque' };
         }
         return { t: 'ident', parts: ref.parts.map((p) => p.name), scope: this.scope };
@@ -1212,11 +1338,13 @@ class FileParser {
     }
   }
 
-  private parseCallArgs(): void {
+  /** A call's parenthesised arguments; returns how many there were. */
+  private parseCallArgs(): number {
     if (!this.isPunct(this.peek(), '(')) {
-      return;
+      return 0;
     }
     this.next();
+    let count = 0;
     for (;;) {
       if (this.isPunct(this.peek(), ')')) {
         this.next();
@@ -1226,6 +1354,7 @@ class FileParser {
         break;
       }
       this.parseExpr();
+      count++;
       if (this.isPunct(this.peek(), ',')) {
         this.next();
         continue;
@@ -1235,6 +1364,7 @@ class FileParser {
       }
       break;
     }
+    return count;
   }
 
   // ---- references ----
@@ -1253,6 +1383,30 @@ class FileParser {
     this.index.refs.push(ref);
     return ref;
   }
+}
+
+/** Macro overloads in the order baron tries them (macros.c macro_signature_before, applied
+ *  by stable insertion as macros_add_signature does): at the first slot two signatures
+ *  differ, a fixed token beats a parameter; failing that, a longer signature beats its
+ *  prefix; otherwise definition order. */
+function overloadOrder(defs: Definition[]): Definition[] {
+  const before = (a: MacroSlot[], b: MacroSlot[]): boolean => {
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      if (a[i].t !== b[i].t) {
+        return b[i].t === 'param';
+      }
+    }
+    return a.length > b.length;
+  };
+  const order: Definition[] = [];
+  for (const def of defs) {
+    let pos = 0;
+    while (pos < order.length && !before(def.macroSlots ?? [], order[pos].macroSlots ?? [])) {
+      pos++;
+    }
+    order.splice(pos, 0, def);
+  }
+  return order;
 }
 
 /** Constant-evaluate a section attribute expression as evalConst does, imported lazily

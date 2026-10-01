@@ -18,11 +18,22 @@ abbreviations resolve to the right keyword, `PROC`/`FN` names, `*` commands, `RE
 raw tails, uppercase-only `&` hex, and line numbers.
 
 ### CMOS-aware opcode colouring ###
-The parser tracks `SECTION` nesting and evaluates the `cmos` attribute (inherited by
-nested sections, exactly as baron does). 65C02-only instructions — the extra mnemonics,
+The parser tracks `SECTION` nesting and evaluates each section's own `cmos` attribute
+(not inherited by nested sections, exactly as baron does). 65C02-only instructions — the extra mnemonics,
 and the CMOS-only addressing modes such as `LDA (zp)`, `BIT #`, `BIT zp,X`, `INC A` and
 `JMP (abs,X)` — are coloured as ordinary opcodes inside a `cmos = TRUE` section, and as
 **invalid** (red) in plain NMOS context, via semantic tokens.
+
+### Macro and function call colouring ###
+A macro invocation or `FUNCTION` call is coloured like the macro or function name in its
+definition, but only when baron would accept the call where it stands: the macro or
+function is defined *earlier* (both are define-before-use), and one of its overloads fits
+the call — the macro signature's parameters, commas and quoted literal tokens, matched
+the way baron matches them, or the function's argument count. A misspelt, misordered or
+mis-shaped call stays plain text, so you can see at a glance whether it is right. A
+function call needs its `(` directly after the name (`f(x)`, not `f (x)`), as in baron.
+The semantic token types are `macroCall` and `functionCall`, if you want to give them
+their own colours with `editor.semanticTokenColorCustomizations`.
 
 ### Navigation and editing ###
 A TypeScript parser mirroring baron's own (lexer.c / assemble.c / expression.c are the
@@ -30,8 +41,10 @@ reference) understands symbols, labels, named and anonymous scopes, local labels
 (`.@`, `@-`, `@+`), macros (with overloads), functions, sections, `INCLUDE`s, and full
 expressions including multi-line lists, ranges and subscripts. On top of it:
 
-- **Go to definition** (F12) — works on dotted paths (`wipe.nonzero`), macro calls,
-  `@-`/`@+`, and `INCLUDE`/`INCBIN` file names.
+- **Go to definition** (F12) — works on dotted paths (`wipe.nonzero`), macro
+  invocations and function calls (straight to the overload the call matches; macros
+  and functions are their own namespaces, so a label sharing a macro's name never gets
+  in the way), `@-`/`@+`, and `INCLUDE`/`INCBIN` file names.
 - **Find all references** (Shift+F12).
 - **Hover** — the defining line, its scope, doc comments above it, and the evaluated
   value of constant symbols (decimal and hex).

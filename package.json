@@ -2,7 +2,7 @@
   "name": "baron-vsc",
   "displayName": "Baron BBC Micro Assembler",
   "description": "Language support for the Baron BBC Micro assembler: syntax highlighting (including inline BBC BASIC), go to definition, completion, hover, outline, references, and build integration.",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "publisher": "RichTalbot-Watkins",
   "author": {
     "name": "Rich Talbot-Watkins"
@@ -64,6 +64,16 @@
         "id": "mnemonicInvalid",
         "superType": "keyword",
         "description": "A 65C02-only mnemonic or addressing mode, outside any cmos section"
+      },
+      {
+        "id": "macroCall",
+        "superType": "macro",
+        "description": "A macro invocation that matches a macro defined before it"
+      },
+      {
+        "id": "functionCall",
+        "superType": "function",
+        "description": "A FUNCTION call that matches a function defined before it"
       }
     ],
     "semanticTokenScopes": [
@@ -76,6 +86,12 @@
           ],
           "mnemonicInvalid": [
             "invalid.illegal.mnemonic.baron"
+          ],
+          "macroCall": [
+            "entity.name.function.macro.baron"
+          ],
+          "functionCall": [
+            "entity.name.function.baron"
           ]
         }
       }
