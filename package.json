@@ -2,7 +2,7 @@
   "name": "baron-vsc",
   "displayName": "Baron BBC Micro Assembler",
   "description": "Language support for the Baron BBC Micro assembler: syntax highlighting (including inline BBC BASIC), go to definition, completion, hover, outline, references, and build integration.",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "publisher": "RichTalbot-Watkins",
   "author": {
     "name": "Rich Talbot-Watkins"
@@ -170,6 +170,15 @@
           "description": "Extra command line switches passed to baron before the source files, e.g. [\"-o\", \"demo.ssd\", \"--opt\", \"3\", \"--title\", \"DEMO\"].",
           "scope": "resource"
         },
+        "baron.defines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Default symbol definitions, passed to baron as `-D` switches by every build and background check. Each entry is `NAME=expression` (e.g. `MAP=7`, `TITLE=\"DEMO\"`), or a bare `NAME`, which defines it as `TRUE`. They are defaults: a name the switches already define (`-D NAME=...` in `#baron.buildArgs#`, or typed into **Assemble with Switches...**) uses that value instead. Names are case-sensitive. Use `${defines}` in `#baron.buildOverride#` to pass them to a custom build command.",
+          "scope": "resource"
+        },
         "baron.outputFile": {
           "type": "string",
           "default": "",
@@ -198,7 +207,7 @@
         "baron.buildOverride": {
           "type": "string",
           "default": "",
-          "description": "When set, a shell command that completely replaces the default build invocation (baron + buildArgs + outputFile + sourceFiles) for \"Baron: Assemble\" and the build step of \"Baron: Run in Emulator\" - e.g. a build script. Its stderr is still parsed for file:line:col diagnostics. Checks and \"Assemble with Switches...\" still invoke baron directly.",
+          "description": "When set, a shell command that completely replaces the default build invocation (baron + buildArgs + outputFile + sourceFiles) for \"Baron: Assemble\" and the build step of \"Baron: Run in Emulator\" - e.g. a build script. ${defines} expands to the baron.defines entries as -D switches. Its stderr is still parsed for file:line:col diagnostics. Checks and \"Assemble with Switches...\" still invoke baron directly.",
           "scope": "resource"
         },
         "baron.check": {

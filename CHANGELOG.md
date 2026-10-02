@@ -1,5 +1,16 @@
 # Changelog #
 
+## 0.4.3 (2026-10-02) ##
+
+- New `baron.defines` setting: default `-D` symbol definitions passed to every build and
+  background check, as a list like the C/C++ extension's `C_Cpp.default.defines`. Each
+  entry is `NAME=expression`, or a bare `NAME` for `NAME=TRUE`. A name the build switches
+  define themselves (`baron.buildArgs`, or **Assemble with Switches...**) overrides the
+  default. `${defines}` in `baron.buildOverride` expands to them as `-D` switches.
+  Changing the setting re-runs the check.
+- Errors baron reports against a `-D` switch go to the output channel and a notification
+  linking to the setting, instead of a Problems entry for a file that doesn't exist.
+
 ## 0.4.2 (2026-10-01) ##
 
 - `ASSERT cond [, message...]` (baron 0.4.1): highlighted as a directive, completed at

@@ -158,6 +158,10 @@ export function activate(context: vscode.ExtensionContext): void {
         updateContextKey();
         semanticTokens.refresh(); // the unit boundaries moved
       }
+      if (e.affectsConfiguration('baron.defines')
+          && vscode.workspace.getConfiguration('baron').get<string>('check') !== 'off') {
+        build.runCheck(); // the program baron sees changed
+      }
     }),
   );
 

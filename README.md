@@ -98,7 +98,8 @@ In your workspace `.vscode/settings.json`:
   "baron.executablePath": "/path/to/baron",
   "baron.sourceFiles": ["boot.6502", "loader.6502", "demo.6502"],
   "baron.outputFile": "demo.ssd",
-  "baron.buildArgs": ["--opt", "3", "--title", "STARGLOBE", "-v"]
+  "baron.buildArgs": ["--opt", "3", "--title", "STARGLOBE", "-v"],
+  "baron.defines": ["MAP=7", "DEBUG"]
 }
 ```
 
@@ -110,13 +111,24 @@ Each assembles independently (its own symbol table), and together with their `IN
 graphs they define what go-to-definition can see. With no root files configured, the
 active editor's file is used.
 
+`baron.defines` holds default `-D` symbol definitions, in the same shape as the C/C++
+extension's `C_Cpp.default.defines`: a list of `NAME=expression` entries (edited as a
+list in the Settings UI), where a bare `NAME` means `NAME=TRUE`. They are passed to every
+build and every background check. They are defaults: a name the switches already define
+(`-D NAME=...` in `baron.buildArgs`, or typed into **Assemble with Switches...**) uses
+that value instead, since baron rejects the same name defined twice. Names are
+case-sensitive, as baron's symbols are. If baron rejects a definition, the error appears
+in the *Baron* output channel with a link to the setting.
+
 If baron isn't on your PATH, point `baron.executablePath` at the binary. Set
 `baron.check` to `onSave` or `off` to dial back the live checking.
 
 To build with your own script instead of the default invocation, set
 `baron.buildOverride` to any shell command (e.g. `"./build.sh"`): **Baron: Assemble**
 and the build step of **Run in Emulator** then run it verbatim (its stderr is still
-parsed for `file:line:col` diagnostics), while checks and **Assemble with Switches...**
+parsed for `file:line:col` diagnostics; `${defines}` in it expands to the
+`baron.defines` entries as `-D` switches, each quoted for the shell, e.g.
+`"./build.sh ${defines}"`), while checks and **Assemble with Switches...**
 keep invoking baron directly with `baron.sourceFiles`.
 
 ## Development ##

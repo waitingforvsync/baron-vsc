@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { defineSwitches, shellQuote } from './core/defines';
 import { docFile, Project } from './project';
 
 const DIAG_RE = /^(.+?):(\d+):(\d+):\s+(error|warning):\s+(.*)$/;
@@ -48,14 +49,16 @@ export class BaronBuild {
     return exe.includes('/') || exe.includes(path.sep) ? path.resolve(wsRoot, exe) : exe;
   }
 
-  /** The switches actually passed to baron: the given base set, plus "-o <outputFile>"
-   *  from baron.outputFile when the base doesn't already carry a -o of its own. */
+  /** The switches actually passed to baron: the default -D switches from baron.defines
+   *  (less any name the base set defines itself), the given base set, then "-o
+   *  <outputFile>" from baron.outputFile when the base doesn't already carry a -o. */
   private effectiveArgs(config: vscode.WorkspaceConfiguration, base: string[]): string[] {
+    const args = [...defineSwitches(config.get<string[]>('defines') ?? [], base), ...base];
     const outputFile = config.get<string>('outputFile') ?? '';
     if (outputFile !== '' && !base.includes('-o')) {
-      return [...base, '-o', outputFile];
+      args.push('-o', outputFile);
     }
-    return base;
+    return args;
   }
 
   /** The disc image a build produces: baron.outputFile, else the -o value in the args. */
@@ -222,7 +225,11 @@ export class BaronBuild {
     // baron.buildOverride replaces the whole default invocation (for the plain build
     // only - "Assemble with Switches..." always builds a baron command line, that being
     // its point). It runs through the shell, so a script or pipeline works.
-    const override = extraArgs === undefined ? (config.get<string>('buildOverride') ?? '').trim() : '';
+    // ${defines} in it expands to baron.defines as shell-quoted -D switches.
+    const defines = defineSwitches(config.get<string[]>('defines') ?? [], []).map((a) => shellQuote(a)).join(' ');
+    const override = extraArgs === undefined
+      ? (config.get<string>('buildOverride') ?? '').trim().split('${defines}').join(defines)
+      : '';
 
     let args: string[] = [];
     if (override === '') {
@@ -348,6 +355,7 @@ export class BaronBuild {
   private publishDiagnostics(stderr: string, cwd: string): { errors: number; warnings: number } {
     this.diagnostics.clear();
     const byFile = new Map<string, vscode.Diagnostic[]>();
+    const defineProblems: string[] = [];
     let errors = 0;
     let warnings = 0;
     for (const line of stderr.split(/\r?\n/)) {
@@ -356,6 +364,17 @@ export class BaronBuild {
         continue;
       }
       const [, file, lineStr, colStr, severity, message] = m;
+      if (file.startsWith('-D ')) {
+        // baron names a -D switch's diagnostics after the switch itself ("-D MAP=7+:1:6:
+        // error: ..."): there is no file to squiggle, so report them against the setting.
+        defineProblems.push(`${file}: ${message}`);
+        if (severity === 'warning') {
+          warnings++;
+        } else {
+          errors++;
+        }
+        continue;
+      }
       const lineNo = Math.max(0, parseInt(lineStr, 10) - 1);
       const colNo = Math.max(0, parseInt(colStr, 10) - 1);
       const abs = path.isAbsolute(file) ? file : path.resolve(cwd, file);
@@ -378,7 +397,32 @@ export class BaronBuild {
     for (const [file, diags] of byFile) {
       this.diagnostics.set(vscode.Uri.file(file), diags);
     }
+    this.reportDefineProblems(defineProblems);
     return { errors, warnings };
+  }
+
+  /** Problems with the -D switches go to the output channel, and to a notification -
+   *  only when they change, since onType checks would otherwise repeat it per keystroke. */
+  private lastDefineProblems = '';
+
+  private reportDefineProblems(problems: string[]): void {
+    const text = problems.join('\n');
+    if (text === this.lastDefineProblems) {
+      return;
+    }
+    this.lastDefineProblems = text;
+    if (text === '') {
+      return;
+    }
+    this.output.appendLine(text);
+    void vscode.window.showWarningMessage(
+      `Baron: a -D define was rejected (check baron.defines and the build switches): ${problems[0]}`,
+      'Open Settings',
+    ).then((choice) => {
+      if (choice) {
+        void vscode.commands.executeCommand('workbench.action.openSettings', 'baron.defines');
+      }
+    });
   }
 
   async buildWithArgs(): Promise<void> {
@@ -411,3 +455,4 @@ export function splitArgs(input: string): string[] {
   }
   return args;
 }
+

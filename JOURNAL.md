@@ -478,3 +478,38 @@ in the unit, and when baron.sourceFiles changes.
   beside .out, ASSERT in both forms, and macro self-recursion.
 - 37/37 tests, typecheck clean, packaged baron-vsc-0.4.2.vsix.
 - Also corrected a stale README line that still said nested sections inherit `cmos`.
+
+## 2026-10-02: 0.4.3 - default -D defines ##
+
+Rich asked for default `-D` values, used by both the background check and the real build,
+specified "the way the C/C++ tools do". That means `C_Cpp.default.defines`, which he
+already uses: an array of `NAME` / `NAME=value` strings, edited as a list in the Settings
+UI. So `baron.defines` is `string[]`.
+
+Verified against baron 0.4.2.0 (main.c, assemble.c apply_define) before encoding:
+- Only the two-argument form `-D name=expr` is accepted (`-DMAP=7` is an unknown
+  option), and the `=` is mandatory. So a bare `NAME` entry maps to `NAME=TRUE`, C's
+  "defined as 1" (TRUE coerces to 1, and `-D DEBUG=TRUE` is baron's own help example).
+- A second `-D` of the same name is an error: "Duplicate symbol", with a "First defined
+  here" note. So the configured entries really are DEFAULTS. A name the base switches
+  define (buildArgs, or the Assemble-with-Switches line) is dropped from them, as is a
+  repeated entry after its first. This mirrors the existing baron.outputFile / `-o` rule.
+- Symbol names are case-sensitive (`-D MAP=7` leaves `map` undefined; `-D MAP` plus
+  `-D map` is no duplicate), so overrides match case-sensitively.
+- Defines apply in argv order, and an expression may name an earlier define
+  (`-D N=MAP` works). So the defaults go BEFORE the base switches, which lets an explicit
+  `-D` build on a default.
+- A `-D` diagnostic names the switch as its "file": `-D MAP=7+:1:6: error: ...`.
+  publishDiagnostics used to resolve that as a relative path, giving a Problems entry
+  for a nonexistent file. Those lines now go to the output channel plus a notification
+  with an "Open Settings" button, shown only when the text changes (onType checks would
+  otherwise repeat it every keystroke). They still count in the error totals.
+
+Wiring: effectiveArgs() (shared by build, check and Assemble with Switches) prepends
+defineSwitches(). baron.buildOverride runs an arbitrary shell command, so nothing can be
+injected safely. Instead a `${defines}` placeholder expands to shell-quoted switches
+(single quotes on POSIX, double quotes with `\"` on win32). Changing baron.defines
+triggers a check. The logic is pure in src/core/defines.ts, with 3 tests. End to end:
+real baron accepted the generated switches both spawned and through the shell-quoted
+form, and an explicit `-D MAP=9` overrode a default `MAP=7`. Bumped to 0.4.3, since
+0.4.2 was already pushed for publishing. 40/40 tests, typecheck clean.

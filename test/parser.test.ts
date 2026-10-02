@@ -2,6 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { defineSwitches, shellQuote } from '../src/core/defines';
 import { Lexer, TokKind } from '../src/core/lexer';
 import { evalConst, FileProvider, scopeAt, Unit } from '../src/core/model';
 import { parseUnit } from '../src/core/parser';
@@ -678,4 +679,25 @@ test('a self-call inside a macro body matches', () => {
   const [inner, outer] = calls(parse(src));
   assert.equal(inner.matched?.name, 'countdown');
   assert.equal(outer.matched?.name, 'countdown');
+});
+
+// ---- 0.4.3: default -D defines ----
+
+test('defines become -D switches; bare names are TRUE', () => {
+  assert.deepEqual(defineSwitches(['MAP=7', 'DEBUG', ' TITLE = "A B" ', ''], []),
+    ['-D', 'MAP=7', '-D', 'DEBUG=TRUE', '-D', 'TITLE = "A B"']);
+});
+
+test('defines are defaults: explicit -D switches and earlier entries win', () => {
+  const base = ['-v', '-D', 'MAP=9', '-o', 'x.ssd'];
+  // MAP is left to the switches; names are case-sensitive, so `map` still passes; the
+  // second DEBUG entry is dropped rather than handing baron a duplicate.
+  assert.deepEqual(defineSwitches(['MAP=7', 'map=1', 'DEBUG=1', 'DEBUG=2'], base),
+    ['-D', 'map=1', '-D', 'DEBUG=1']);
+});
+
+test('shell quoting for ${defines} in buildOverride', () => {
+  assert.equal(shellQuote('MAP=7', 'linux'), 'MAP=7');
+  assert.equal(shellQuote('TITLE="it\'s"', 'linux'), `'TITLE="it'\\''s"'`);
+  assert.equal(shellQuote('TITLE="A B"', 'win32'), '"TITLE=\\"A B\\""');
 });
