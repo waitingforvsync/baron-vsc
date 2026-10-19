@@ -227,6 +227,46 @@ console.log(`all ${samples.length} samples agree with the ROM matcher`);
 const grammarPath = path.join(__dirname, '..', 'syntaxes', 'baron.tmLanguage.json');
 const grammar = JSON.parse(fs.readFileSync(grammarPath, 'utf8'));
 
+// A '{' ending a BASIC line (blanks aside) drops into Baron until its '}', and the line
+// carries on as it left off (baron's parse_basic_line). So a string or a raw tail is a
+// begin/end rule with the splice inside it, and names its text piecewise: a name on the
+// rule itself would colour the Baron in the splice as REM or string too.
+const SPLICE_OPEN = '\\{(?=[ \\t]*$)';
+// A splice left open gives up where baron's error does: the next numbered line or ENDBASIC.
+const LINE_RESUMES = '(?=^\\s*(?:\\d|(?i:endbasic)\\b))';
+
+const STAR = 'keyword.other.star-command.bbcbasic.baron';
+const STRING = 'string.quoted.double.bbcbasic.baron';
+
+// The rest of the line raw (REM, DATA, '*'), splices and all.
+function rawTail(begin, beginCaptures, name) {
+  return {
+    begin,
+    end: `$|${LINE_RESUMES}`,
+    beginCaptures,
+    patterns: [
+      { include: '#basic-splice' },
+      { name, match: `.+?(?=${SPLICE_OPEN}|$)` },
+    ],
+  };
+}
+
+grammar.repository['basic-splice'] = {
+  name: 'meta.embedded.splice.baron',
+  begin: SPLICE_OPEN,
+  end: `\\}|${LINE_RESUMES}`,
+  beginCaptures: { '0': { name: 'punctuation.section.embedded.begin.baron' } },
+  endCaptures: { '0': { name: 'punctuation.section.embedded.end.baron' } },
+  patterns: [{ include: '#braces' }, { include: '$self' }],
+};
+
+// Braces inside a splice nest, so a list or a scope there keeps its own '}'.
+grammar.repository['braces'] = {
+  begin: '\\{',
+  end: '\\}',
+  patterns: [{ include: '#braces' }, { include: '$self' }],
+};
+
 grammar.repository['basic-block'] = {
   begin: '(?i)^\\s*(basic)\\s*(?=$|;|\\\\|:)',
   end: '(?i)^\\s*(endbasic)\\b',
@@ -234,40 +274,28 @@ grammar.repository['basic-block'] = {
   endCaptures: { '1': { name: 'keyword.control.directive.baron' } },
   contentName: 'meta.embedded.block.bbcbasic.baron',
   patterns: [
+    { include: '#basic-splice' },
     { name: 'comment.line.semicolon.baron', match: '^\\s*;.*$' },
     { name: 'comment.line.backslash.baron', match: '^\\s*\\\\.*$' },
-    {
-      match: '^(\\s*)(\\d+)(\\s*)(\\*.*)$',
-      captures: {
-        '2': { name: 'constant.numeric.line-number.bbcbasic.baron' },
-        '4': { name: 'keyword.other.star-command.bbcbasic.baron' },
-      },
-    },
-    {
-      match: '(?<=:)\\s*(\\*.*)$',
-      captures: { '1': { name: 'keyword.other.star-command.bbcbasic.baron' } },
-    },
+    rawTail('^(\\s*)(\\d+)(\\s*)(\\*)', {
+      '2': { name: 'constant.numeric.line-number.bbcbasic.baron' },
+      '4': { name: STAR },
+    }, STAR),
+    rawTail('(?<=:)\\s*(\\*)', { '1': { name: STAR } }, STAR),
     { name: 'constant.numeric.line-number.bbcbasic.baron', match: '^\\s*\\d+' },
     {
-      name: 'string.quoted.double.bbcbasic.baron',
       begin: '"',
-      end: '"(?!")',
-      patterns: [{ name: 'constant.character.escape.baron', match: '""' }],
+      end: `"(?!")|$|${LINE_RESUMES}`,
+      beginCaptures: { '0': { name: STRING } },
+      endCaptures: { '0': { name: STRING } },
+      patterns: [
+        { include: '#basic-splice' },
+        { name: 'constant.character.escape.baron', match: '""' },
+        { name: STRING, match: `[^"]+?(?=${SPLICE_OPEN}|"|$)` },
+      ],
     },
-    {
-      match: '(REM)(.*)$',
-      captures: {
-        '1': { name: 'keyword.control.bbcbasic.baron' },
-        '2': { name: 'comment.line.rem.bbcbasic.baron' },
-      },
-    },
-    {
-      match: '(DATA|D(?:AT|A)?\\.)(.*)$',
-      captures: {
-        '1': { name: 'keyword.control.bbcbasic.baron' },
-        '2': { name: 'string.unquoted.data.bbcbasic.baron' },
-      },
-    },
+    rawTail('(REM)', { '1': { name: 'keyword.control.bbcbasic.baron' } }, 'comment.line.rem.bbcbasic.baron'),
+    rawTail('(DATA|D(?:AT|A)?\\.)', { '1': { name: 'keyword.control.bbcbasic.baron' } }, 'string.unquoted.data.bbcbasic.baron'),
     {
       match: '(PROC|PRO\\.|FN)([A-Za-z0-9_`]*)',
       captures: {

@@ -52,7 +52,9 @@ const ACC_MNEMONICS = new Set(['asl', 'lsr', 'rol', 'ror', 'inc', 'dec']);
 const IDENT_RUN = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/;
 
 interface Block {
-  type: 'scope' | 'for' | 'macro' | 'function' | 'section';
+  /** A splice is Baron statements inside a BASIC line ('{' ... '}'): no scope of its own,
+   *  and its outlineNode is the BASIC block's, which carries on past the '}'. */
+  type: 'scope' | 'for' | 'macro' | 'function' | 'section' | 'splice';
   prevScope?: Scope;
   prevCmos?: boolean;
   outlineNode?: OutlineNode;
@@ -260,6 +262,12 @@ class FileParser {
   }
 
   private parseStatement(tok: Token): void {
+    // A numbered line or ENDBASIC inside a splice means its '}' never came. Baron stops
+    // there with an error; we hand the rest back to the BASIC.
+    if ((/^\d/.test(tok.text) || tok.lower === 'endbasic') && this.findBlock('splice') >= 0) {
+      this.resumeBasic(tok.start, false);
+      return;
+    }
     if (tok.kind === TokKind.Punct) {
       if (tok.lower === '.') {
         this.parseLabel();
@@ -271,8 +279,13 @@ class FileParser {
         return;
       }
       if (tok.lower === '}') {
+        // The nearer of a brace scope and a splice is the one this closes.
         const brace = this.next();
-        this.closeBlock('scope', brace.end);
+        if (this.findBlock('splice') > this.findBlock('scope')) {
+          this.resumeBasic(brace.end, true);
+        } else {
+          this.closeBlock('scope', brace.end);
+        }
         return;
       }
       if (tok.lower === '=') {
@@ -432,15 +445,19 @@ class FileParser {
     this.scopeEvent(braceTok.end, child);
   }
 
-  /** Close the innermost block of the given type, tolerantly unwinding anything above it. */
-  private closeBlock(type: Block['type'], offset: number): void {
-    let found = -1;
+  /** The index of the innermost open block of the given type, or -1. */
+  private findBlock(type: Block['type']): number {
     for (let i = this.blocks.length - 1; i >= 0; i--) {
       if (this.blocks[i].type === type) {
-        found = i;
-        break;
+        return i;
       }
     }
+    return -1;
+  }
+
+  /** Close the innermost block of the given type, tolerantly unwinding anything above it. */
+  private closeBlock(type: Block['type'], offset: number): void {
+    const found = this.findBlock(type);
     if (found < 0) {
       return; // a closer with nothing to close: baron errors, we shrug
     }
@@ -637,8 +654,16 @@ class FileParser {
       return;
     }
     this.next();
-    const def = this.define('section', name, this.scope);
-    this.up.addGlobal(this.up.unit.sections, def);
+    // Naming a section again reopens it (baron allows that only for a virtual one): a use of
+    // the first SECTION line, whose attributes still hold.
+    const reopened = this.up.unit.sections.get(name.lower)?.[0];
+    let def: Definition | undefined;
+    if (reopened) {
+      this.recordIdentRef(name, 'section');
+    } else {
+      def = this.define('section', name, this.scope);
+      this.up.addGlobal(this.up.unit.sections, def);
+    }
 
     const prevCmos = this.cmos; // restored at ENDSECTION
     let cmosSeen = false;
@@ -665,17 +690,23 @@ class FileParser {
         this.cmos = v === undefined ? true : v !== 0;
       }
     }
-    if (!cmosSeen) {
+    if (reopened) {
+      this.cmos = reopened.cmos ?? false; // a reopening takes no attributes of its own
+    } else if (!cmosSeen) {
       // Attributes are not inherited (baron 0.3.0): a section without its own cmos
       // attribute targets plain NMOS, whatever the enclosing section had.
       this.cmos = false;
     }
+    if (def) {
+      def.cmos = this.cmos;
+    }
 
+    const loc = this.loc(name);
     const node: OutlineNode = {
       name: name.text,
       kind: 'section',
-      loc: def.loc,
-      fullLoc: { file: this.index.file, start: kw.start, end: def.loc.end },
+      loc,
+      fullLoc: { file: this.index.file, start: kw.start, end: loc.end },
       detail: attrs.length ? attrs.join(', ') : undefined,
       children: [],
     };
@@ -850,11 +881,58 @@ class FileParser {
   }
 
   private parseBasic(kw: Token): void {
-    // BASIC lines are opaque spans: a statement starting with a digit runs to end of line
-    // and the lexer must not see inside it (assemble.c handle_basic). Scan textually.
+    const node: OutlineNode = {
+      name: 'BASIC',
+      kind: 'basic',
+      loc: { file: this.index.file, start: kw.start, end: kw.end },
+      fullLoc: { file: this.index.file, start: kw.start, end: kw.end },
+      children: [],
+    };
+    this.outlineAdd(node);
+    this.scanBasic(node, this.lx.getPos(), false);
+  }
+
+  /** Leave the innermost splice at pos and carry on with its BASIC from there. */
+  private resumeBasic(pos: number, midLine: boolean): void {
+    const node = this.blocks[this.findBlock('splice')].outlineNode!;
+    this.closeBlock('splice', pos);
+    this.scanBasic(node, pos, midLine);
+  }
+
+  /** BASIC lines are opaque spans: a statement starting with a digit runs to end of line
+   *  and the lexer must not see inside it (assemble.c handle_basic), so we scan textually,
+   *  from pos up to the ENDBASIC. A '{' ending a line splices Baron statements into it
+   *  (parse_basic_line): we hand those to the statement loop, in the current scope, and
+   *  come back at the '}', where midLine says the rest of that line is still BASIC. */
+  private scanBasic(node: OutlineNode, pos: number, midLine: boolean): void {
     const text = this.index.text;
-    let pos = this.lx.getPos();
     const contentStart = pos;
+
+    // The '{' ending the line [from, stop) as its last non-blank character, or -1.
+    const spliceAt = (from: number, stop: number): number => {
+      while (stop > from && (text[stop - 1] === ' ' || text[stop - 1] === '\t' || text[stop - 1] === '\r')) {
+        stop--;
+      }
+      return stop > from && text[stop - 1] === '{' ? stop - 1 : -1;
+    };
+    const openSplice = (brace: number): void => {
+      this.index.basicRanges.push({ start: contentStart, end: brace });
+      this.outlineStack.push(node.children);
+      this.blocks.push({ type: 'splice', outlineNode: node, outlinePushed: true });
+      this.lx.setPos(brace + 1);
+    };
+
+    if (midLine) {
+      const lineEnd = text.indexOf('\n', pos);
+      const stop = lineEnd < 0 ? text.length : lineEnd;
+      const brace = spliceAt(pos, stop);
+      if (brace >= 0) {
+        openSplice(brace);
+        return;
+      }
+      pos = stop;
+    }
+
     let end = text.length;
     let closed = false;
     while (pos < text.length) {
@@ -871,6 +949,11 @@ class FileParser {
         break;
       }
       if (ch >= '0' && ch <= '9') {
+        const brace = spliceAt(i, stop);
+        if (brace >= 0) {
+          openSplice(brace);
+          return;
+        }
         pos = stop + 1; // a BASIC line
         continue;
       }
@@ -893,13 +976,7 @@ class FileParser {
       end = text.length;
     }
     this.index.basicRanges.push({ start: contentStart, end });
-    this.outlineAdd({
-      name: 'BASIC',
-      kind: 'basic',
-      loc: { file: this.index.file, start: kw.start, end: kw.end },
-      fullLoc: { file: this.index.file, start: kw.start, end: pos },
-      children: [],
-    });
+    node.fullLoc.end = pos;
     this.lx.setPos(pos);
   }
 

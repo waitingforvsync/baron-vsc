@@ -513,3 +513,134 @@ triggers a check. The logic is pure in src/core/defines.ts, with 3 tests. End to
 real baron accepted the generated switches both spawned and through the shell-quoted
 form, and an explicit `-D MAP=9` overrode a default `MAP=7`. Bumped to 0.4.3, since
 0.4.2 was already pushed for publishing. 40/40 tests, typecheck clean.
+
+## 2026-10-11: BASIC line splices, virtual sections ##
+
+Rich asked for the extension to understand Baron statements spliced into BASIC lines
+(baron issue #12, commit d1b1da8), and for a check that the keywords are up to date.
+
+### Verified in source (baron 0.5.2.0, d1b1da8) ###
+- **parse_basic_line / basic_splice_at**: a `{` that is the last non-blank character
+  (space, tab, CR) of a numbered line's text opens a splice. The body is `parse_scope`
+  in the CURRENT scope, so a label in it belongs to the program. Its `}` resumes the
+  same line: the text after it runs to the end of that physical line, and may end in
+  another `{`. The `{` test is purely textual, so a REM or string ending in `{` is a
+  splice too. One that never closes runs on until something can't be Baron (the next
+  numbered line, ENDBASIC), which is an error with a "Note: In the BASIC splice opened
+  here" line at the `{`.
+- Probed with a fresh build: `PR{`/`}INT 5` gives the INT token (a splice ends a token,
+  then matching restarts), statement start carries (`20{`, `}*FX 0` is a raw star
+  command), `}{` splices again at once, and nested scope braces, list literals, `'}'`
+  and a `}` in a `;` comment all leave the splice open.
+- **Keyword audit** against 016a764 (the 0.4.2 sync): the statement token table
+  (assemble.c) and the builtin `name(` table (expression.c) are unchanged, so ASSERT and
+  the rest were already covered. The only new syntax is the `virtual` section attribute
+  and reopening: `SECTION name` again finds the section (sections_find) and, if it is
+  virtual, carries on with it. A reopening's attributes are an error and are not applied,
+  so the first line's `cmos` still holds (verified: STZ in a reopened cmos section
+  assembles). Character literals, range limits, SKIP/ALIGN bounds, the &FFFF overflow
+  check, the symbol dump and the ZA_CAN* label lookup change no syntax.
+- Section names are not symbols: `LDA ws` is "Undefined symbol". The extension's value
+  reference fallback to sections (resolve.ts) is a navigation nicety and stays.
+
+### Grammar ###
+gen-basic-grammar.js now also writes `basic-splice` and `braces`. The splice is a
+begin/end rule (`{` before trailing blanks, to `}`) holding `$self`, with `braces` so a
+nested `{...}` keeps its own `}`. The state that carries through a splice is modelled
+by nesting. The BASIC string and the REM/DATA/`*` tails became begin/end rules with the
+splice inside them, and each names its text piecewise rather than with a rule `name`.
+A name on the rule would sit on the scope stack inside the splice, and every unscoped
+Baron token there would pick up the REM or string colour. The splice is
+`meta.embedded.splice.baron`. vscode-textmate maps `meta.embedded` back to the "Other"
+token type, so VS Code pairs the splice's `{` and `}` as brackets even when the `{`
+sits in a REM or a string. An unclosed splice, and the string or tail around it, end
+zero-width at a line starting with a digit or ENDBASIC, as baron's error does. BASIC
+strings also end at the end of the line now (they used to run on).
+
+Tested with vscode-textmate 9.1.0 + vscode-oniguruma 2.0.1 in a scratch directory, by
+dumping token scopes. Every .6502 in portalc, the baron examples and the test fixture
+tokenises as before, except portalc's boot.6502 (it already uses splices, and now
+colours them as Baron) and the colours loader (`*/COLOURS` is now two tokens with the
+same scope).
+
+### Parser ###
+- A `splice` Block. scanBasic scans BASIC text as before, and at a line ending in `{`
+  pushes a splice and hands the statement loop the position past it. A `}` closes the
+  nearer of a brace scope and a splice; a splice's `}` calls resumeBasic, which scans on
+  from the rest of that line. A numbered line or ENDBASIC met inside a splice resumes
+  the BASIC there too (baron's error point).
+- basicRanges now holds one range per stretch of BASIC text, so completion works inside
+  a splice. The spliced labels sit under the BASIC block in the outline.
+- A second `SECTION name` records a `section` reference (resolved straight to
+  unit.sections) instead of a second definition, and takes the first one's cmos, kept
+  on the new `Definition.cmos`. `virtual` joined SECTION_ATTRIBUTES and the grammar's
+  section-attrs rule.
+
+### Verification ###
+- Differential dump of every def, ref resolution and mnemonic, HEAD vs new, over
+  portalc and the baron examples. The only changes are intended: boot.6502's spliced
+  labels now resolve (`cmd`, `message`, `basic_entry`), `.start` is found (it used to be
+  skipped as junk after the opaque `10REM{` line), the junk refs `CALLPAGE` and `EQUB`
+  are gone, and portalc's reopened `Tables` section is one definition plus a reference.
+- Three new tests (splice scope and BASIC text, unclosed-splice recovery, reopening).
+  Each fails against the old parser. Every premise was checked with baron first.
+- 43/43 tests, typecheck clean. Bumped to 0.5.2 at Rich's request, aligning with baron
+  0.5.2.0, then to 0.5.3 once baron moved to 0.5.3.0 for the splices and STR/VAL (package-lock.json still said 0.2.1; `npm version` brought it into line).
+
+### STR and VAL (same day) ###
+Rich asked for BASIC's STR and VAL in baron. Implemented there (uncommitted; see baron's
+JOURNAL): both are element-wise `name(` operand tokens, so the extension only needed the
+names in BUILTIN_FUNCTIONS (completion, and the parser's builtin check, so `STR(n)` is no
+longer an undefined funccall) and in the grammar's builtin-functions rule (hand-written,
+not generated). One test. 44/44.
+Renamed the same day to AS_STRING / AS_NUMBER (Rich's call): they pair with IS_STRING /
+IS_NUMBER, and a builtin reserves its name against user FUNCTIONs, so STR and VAL would
+have broken programs that define their own. data.ts, the grammar rule and the test follow.
+
+### Macro calls coloured as keywords (2026-10-12) ###
+Rich found macro calls hard to tell from labels: `macroCall` mapped to
+entity.name.function.macro.baron, which Dark+ (like most themes) colours the same as
+labels, function names and builtins. At Rich's request it now maps to
+keyword.control.directive.macro.baron, the directives' colour (purple in Dark+), not the
+mnemonics' `keyword` blue or the ZA_ teal. Its superType is now `keyword`, so a theme
+with semantic keyword colours treats it as one too. The MACRO line's own name and
+`functionCall` are unchanged.
+
+Rich had also seen cross-file macro calls go uncoloured for a while. A dump of portalc's
+two units from disk resolved and matched all 58 macro calls through their INCLUDEs, and it
+came right by itself. The real cause turned up next (below).
+
+### Stale units: disk writes and git's HEAD copies (2026-10-12) ###
+It came back: VCACHE_VERT gave "no definition found" in capture.6502, though portal.6502
+INCLUDEs src/vcache_macros.6502 first. The disk dump resolved it fine, so the cached
+units were stale. An agent is rewriting portalc outside VS Code (it had just split the
+macros into new src/*_macros.6502 files and rewritten portal.6502's INCLUDEs). Two holes:
+
+- Project marked itself dirty only on onDidChangeTextDocument, configuration changes and
+  onDidCreate/Delete/RenameFiles. Those last three fire only for operations VS Code makes
+  itself, and the first only for loaded documents. So a file written on disk and not
+  loaded in VS Code kept its old parse, offsets and INCLUDEs included, until some
+  document change in VS Code. Now a FileSystemWatcher on `**/*` marks the units dirty
+  for any file they involve: a root, a parsed file, or an INCLUDE/INCBIN target, the
+  latter recorded even when missing, so a file created later counts. It fires
+  onDidChangeOnDisk, and extension.ts then recolours and runs a check, unless
+  baron.check is off. Files loaded in VS Code are skipped: VS Code reloads them itself,
+  with a change event, and counting them as well would check every save twice. The
+  three workspace file-operation handlers went, since the watcher sees those writes too.
+- getText took the first workspace.textDocuments entry whose fsPath matched. The git
+  extension's HEAD copies (scheme `git`, loaded for diffs and the quick-diff gutter)
+  have the same fsPath, so a unit could be parsed from last commit's portal.6502, whose
+  INCLUDEs predate the *_macros files. The check's mirror had the same lookup, so it
+  could write the HEAD text into the shadow tree. Both now take only `file` and
+  `untitled` documents (project.ts isSourceDoc). The providers' selector is narrowed
+  the same way: a diff's git: side is last commit's text, so tokens and lookups computed
+  from the working file don't fit it.
+
+Not covered: the watcher sees the workspace folders only, so a file INCLUDEd from outside
+them is still read fresh only when something else marks the units dirty. Typecheck and
+44/44 tests (the core tests can't reach the VS Code layer, so this needs trying in VS Code).
+
+### 0.5.4 (2026-10-12) ###
+0.5.3 had already gone to the marketplace (2026-10-11 20:46, after the AS_STRING rename),
+so the macro-call colour and the two stale-unit fixes ship as 0.5.4, at Rich's request.
+The extension is now ahead of baron's 0.5.3.0.

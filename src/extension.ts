@@ -15,7 +15,12 @@ import {
 export function activate(context: vscode.ExtensionContext): void {
   const project = new Project(context);
   const build = new BaronBuild(context, project);
-  const selector: vscode.DocumentSelector = { language: 'baron' };
+  // Real files and untitled buffers only: a diff's `git:` side is last commit's text,
+  // which our tokens and lookups (made from the working file) don't fit.
+  const selector: vscode.DocumentSelector = [
+    { language: 'baron', scheme: 'file' },
+    { language: 'baron', scheme: 'untitled' },
+  ];
   const semanticTokens = new BaronSemanticTokensProvider(project);
   let checkTimer: ReturnType<typeof setTimeout> | undefined;
   let tokensTimer: ReturnType<typeof setTimeout> | undefined;
@@ -151,6 +156,17 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       clearTimeout(checkTimer);
       checkTimer = setTimeout(() => build.runCheck(), 500);
+    }),
+
+    // A file written outside the editor counts as saved: recolour, and check unless the
+    // checks are off.
+    project.onDidChangeOnDisk(() => {
+      clearTimeout(tokensTimer);
+      tokensTimer = setTimeout(() => semanticTokens.refresh(), 300);
+      if (vscode.workspace.getConfiguration('baron').get<string>('check') !== 'off') {
+        clearTimeout(checkTimer);
+        checkTimer = setTimeout(() => build.runCheck(), 500);
+      }
     }),
 
     vscode.workspace.onDidChangeConfiguration((e) => {

@@ -50,6 +50,9 @@ export function resolveRef(unit: Unit, ref: Reference, partIndex: number): Defin
     }
     return (ref.kind === 'macrocall' ? unit.macros : unit.functions).get(headLower) ?? [];
   }
+  if (ref.kind === 'section') {
+    return unit.sections.get(headLower) ?? [];
+  }
 
   let defs: Definition[] | undefined = ref.scope.lookupChain(headLower);
   if (!defs || defs.length === 0) {

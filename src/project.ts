@@ -13,9 +13,32 @@ export class Project implements FileProvider {
   private units = new Map<string, Unit>();
   private adhoc = new Map<string, Unit>();
   private dirty = true;
+  private readonly changedOnDisk = new vscode.EventEmitter<void>();
+
+  /** A file the units read, and that no editor has loaded, was written, created or
+   *  deleted on disk. */
+  readonly onDidChangeOnDisk = this.changedOnDisk.event;
 
   constructor(context: vscode.ExtensionContext) {
+    // The document events only cover files open in an editor, so a file written behind
+    // our back (by a build, git or an agent) needs the watcher, or we'd keep its old text.
+    const watcher = vscode.workspace.createFileSystemWatcher('**/*');
+    const onDisk = (uri: vscode.Uri) => {
+      // A loaded file is read from its buffer, which VS Code reloads (with a change event)
+      // itself; counting it here too would check every save twice.
+      const file = normalize(uri.fsPath);
+      const loaded = vscode.workspace.textDocuments.some((d) => isSourceDoc(d) && docFile(d) === file);
+      if (!loaded && this.involves(file)) {
+        this.dirty = true;
+        this.changedOnDisk.fire();
+      }
+    };
     context.subscriptions.push(
+      watcher,
+      this.changedOnDisk,
+      watcher.onDidChange(onDisk),
+      watcher.onDidCreate(onDisk),
+      watcher.onDidDelete(onDisk),
       vscode.workspace.onDidChangeTextDocument((e) => {
         if (this.isRelevant(e.document)) {
           this.dirty = true;
@@ -26,10 +49,14 @@ export class Project implements FileProvider {
           this.dirty = true;
         }
       }),
-      vscode.workspace.onDidCreateFiles(() => { this.dirty = true; }),
-      vscode.workspace.onDidDeleteFiles(() => { this.dirty = true; }),
-      vscode.workspace.onDidRenameFiles(() => { this.dirty = true; }),
     );
+  }
+
+  /** Whether the units read this file, or would: a root, a parsed file, or the target of
+   *  an INCLUDE or INCBIN, even one that was missing when we last looked. */
+  private involves(file: string): boolean {
+    return this.allUnits().some((unit) => unit.rootFile === file || unit.files.has(file)
+      || [...unit.files.values()].some((index) => index.fileRefs.some((fref) => fref.resolved === file)));
   }
 
   private isRelevant(doc: vscode.TextDocument): boolean {
@@ -49,7 +76,7 @@ export class Project implements FileProvider {
 
   getText(file: string): string | undefined {
     for (const doc of vscode.workspace.textDocuments) {
-      if (normalize(doc.uri.fsPath) === file) {
+      if (isSourceDoc(doc) && normalize(doc.uri.fsPath) === file) {
         return doc.getText();
       }
     }
@@ -154,4 +181,11 @@ export function normalize(p: string): string {
 
 export function docFile(doc: vscode.TextDocument): string {
   return normalize(doc.uri.fsPath);
+}
+
+/** A file's own buffer, or an untitled one. The git extension's HEAD copies (scheme
+ *  `git`, behind diffs and the gutter markers) share the file's fsPath, so matching on
+ *  that alone could hand us last commit's text. */
+export function isSourceDoc(doc: vscode.TextDocument): boolean {
+  return doc.uri.scheme === 'file' || doc.uri.scheme === 'untitled';
 }

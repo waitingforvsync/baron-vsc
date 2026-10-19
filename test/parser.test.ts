@@ -276,6 +276,30 @@ test('sections: attributes are not inherited by nested sections', () => {
   assert.deepEqual(byName('plx').map((m) => m.cmosContext), [true]);
 });
 
+test('sections: naming a virtual section again reopens it, cmos and all', () => {
+  const src = [
+    'SECTION ws, org = &400, virtual = TRUE, cmos = TRUE',
+    'PHX',
+    'ENDSECTION',
+    'SECTION main, org = &2000',
+    'ENDSECTION',
+    'SECTION ws',
+    'STZ &70',
+    'ENDSECTION',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  // One definition; the second SECTION line is a use of it.
+  assert.equal(unit.sections.get('ws')!.length, 1);
+  const reopen = index.refs.find((r) => r.kind === 'section')!;
+  assert.equal(src.slice(reopen.parts[0].loc.start, reopen.parts[0].loc.end + 1), 'ws\n');
+  assert.deepEqual(resolveRef(unit, reopen, 0), unit.sections.get('ws'));
+  // A reopening takes no attributes: the first line's cmos still holds.
+  const stz = index.mnemonics.find((m) => m.mnemonic === 'stz')!;
+  assert.equal(stz.cmosContext, true);
+});
+
 test('nmos indirect modes are not flagged', () => {
   const src = 'LDA (&70),Y\nLDA (&70,X)\nJMP (&2000)\nASL A\nINC &70\n';
   const unit = parse(src);
@@ -428,6 +452,77 @@ test('basic blocks are opaque', () => {
   assert.ok(ref);
   assert.equal(resolveRef(unit, ref, 0).length, 1);
   assert.deepEqual(index.mnemonics.map((m) => m.mnemonic), ['ldx', 'jmp']);
+});
+
+test('a splice is Baron in the current scope, and its line carries on after the brace', () => {
+  const src = [
+    'TT_GREEN = &82',
+    'BASIC',
+    '1430REM"{',
+    '  EQUB &7F, TT_GREEN',
+    '}Hello,{',
+    '  EQUB 7 }Reeve{',
+    '}{',
+    '.outer {',
+    '  .inner LDA #1 ; a } in a comment',
+    '}',
+    "  EQUB {1, 2}, '}'",
+    '}',
+    '20CALL beep:PRINT outer',
+    'ENDBASIC',
+    '.beep',
+    'LDA outer.inner',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  const inBasic = (text: string) => {
+    const at = src.indexOf(text);
+    return index.basicRanges.some((r) => at >= r.start && at < r.end);
+  };
+
+  // The splices parsed as Baron, with no scope of their own: the label is the program's.
+  const green = index.refs.find((r) => r.parts[0].name === 'TT_GREEN')!;
+  assert.equal(resolveRef(unit, green, 0).length, 1);
+  assert.equal(index.defs.find((d) => d.name === 'outer')!.scope, unit.globalScope);
+  const inner = index.refs.find((r) => r.parts.length === 2)!;
+  assert.equal(resolveRef(unit, inner, 1)[0].name, 'inner');
+  assert.deepEqual(index.mnemonics.map((m) => m.mnemonic), ['lda', 'lda']);
+  assert.ok(!inBasic('EQUB &7F') && !inBasic('.outer'));
+
+  // The text around them stayed BASIC, after a '}' as much as before a '{'.
+  assert.ok(inBasic('Hello') && inBasic('Reeve') && inBasic('20CALL'));
+  assert.ok(!index.refs.some((r) => ['Hello', 'Reeve', 'CALL', 'beep'].includes(r.parts[0].name)));
+  assert.ok(!index.refs.some((r) => r.parts[0].name === 'outer' && r.parts.length === 1));
+
+  // The spliced labels sit under the BASIC block in the outline.
+  const basic = index.outline.find((n) => n.kind === 'basic')!;
+  assert.deepEqual(basic.children.map((n) => n.name), ['outer']);
+  assert.equal(src.slice(basic.fullLoc.start, basic.fullLoc.end).split('\n').pop(), 'ENDBASIC');
+});
+
+test('a splice left open gives up at the next numbered line or ENDBASIC', () => {
+  // baron reports the unclosed splice there; we hand the rest back to the BASIC.
+  const src = [
+    'BASIC',
+    '10REM "{',
+    '  EQUB 1',
+    '20PRINT X',
+    'ENDBASIC',
+    'BASIC',
+    '10PRINT "{',
+    'ENDBASIC',
+    '.after',
+    'LDA after',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  assert.ok(!index.refs.some((r) => r.parts[0].name === 'PRINT' || r.parts[0].name === 'X'));
+  const after = index.refs.find((r) => r.parts[0].name === 'after')!;
+  assert.equal(resolveRef(unit, after, 0)[0].scope, unit.globalScope);
+  assert.deepEqual(index.mnemonics.map((m) => m.mnemonic), ['lda']);
+  assert.equal(index.outline.filter((n) => n.kind === 'basic').length, 2);
 });
 
 // ---- za_auto ----
@@ -664,6 +759,14 @@ test('function calls: own namespace, arity overloads, paren hard against the nam
   for (const v of values) {
     assert.deepEqual(resolveRef(unit, v, 0).map((d) => d.kind), ['symbol']);
   }
+});
+
+test('AS_STRING and AS_NUMBER are builtins, not calls to user functions', () => {
+  const unit = parse('n = 5\nEQUS AS_STRING(n), AS_NUMBER("&1F")\n');
+  const index = unit.files.get('main.6502')!;
+  assert.ok(!index.refs.some((r) => r.kind === 'funccall'));
+  const n = index.refs.find((r) => r.parts[0].name === 'n')!;
+  assert.equal(resolveRef(unit, n, 0).length, 1);
 });
 
 test('a self-call inside a macro body matches', () => {

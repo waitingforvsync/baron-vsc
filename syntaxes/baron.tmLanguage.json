@@ -198,7 +198,7 @@
     },
     "builtin-functions": {
       "name": "support.function.baron",
-      "match": "(?i)\\b(lo|hi|abs|int|floor|round|trunc|ceil|sqrt|sin|cos|tan|asin|acos|atan|log|ln|exp|not|rnd|len|shape|rank|full|repeated|flatten|concat|zip|reverse|sort|sum|product|min|max|defined|codes|chr|find|is_string|is_number|error)\\s*(?=\\()"
+      "match": "(?i)\\b(lo|hi|abs|int|floor|round|trunc|ceil|sqrt|sin|cos|tan|asin|acos|atan|log|ln|exp|not|rnd|len|shape|rank|full|repeated|flatten|concat|zip|reverse|sort|sum|product|min|max|defined|codes|chr|find|is_string|is_number|error|as_string|as_number)\\s*(?=\\()"
     },
     "constants": {
       "patterns": [
@@ -213,7 +213,7 @@
       ]
     },
     "section-attrs": {
-      "match": "(?i)\\b(org|load|exec|filename|cmos|guard)\\s*(?==[^=])",
+      "match": "(?i)\\b(org|load|exec|filename|cmos|guard|virtual)\\s*(?==[^=])",
       "name": "variable.parameter.attribute.baron"
     },
     "assignment": {
@@ -270,6 +270,9 @@
       "contentName": "meta.embedded.block.bbcbasic.baron",
       "patterns": [
         {
+          "include": "#basic-splice"
+        },
+        {
           "name": "comment.line.semicolon.baron",
           "match": "^\\s*;.*$"
         },
@@ -278,60 +281,110 @@
           "match": "^\\s*\\\\.*$"
         },
         {
-          "match": "^(\\s*)(\\d+)(\\s*)(\\*.*)$",
-          "captures": {
+          "begin": "^(\\s*)(\\d+)(\\s*)(\\*)",
+          "end": "$|(?=^\\s*(?:\\d|(?i:endbasic)\\b))",
+          "beginCaptures": {
             "2": {
               "name": "constant.numeric.line-number.bbcbasic.baron"
             },
             "4": {
               "name": "keyword.other.star-command.bbcbasic.baron"
             }
-          }
+          },
+          "patterns": [
+            {
+              "include": "#basic-splice"
+            },
+            {
+              "name": "keyword.other.star-command.bbcbasic.baron",
+              "match": ".+?(?=\\{(?=[ \\t]*$)|$)"
+            }
+          ]
         },
         {
-          "match": "(?<=:)\\s*(\\*.*)$",
-          "captures": {
+          "begin": "(?<=:)\\s*(\\*)",
+          "end": "$|(?=^\\s*(?:\\d|(?i:endbasic)\\b))",
+          "beginCaptures": {
             "1": {
               "name": "keyword.other.star-command.bbcbasic.baron"
             }
-          }
+          },
+          "patterns": [
+            {
+              "include": "#basic-splice"
+            },
+            {
+              "name": "keyword.other.star-command.bbcbasic.baron",
+              "match": ".+?(?=\\{(?=[ \\t]*$)|$)"
+            }
+          ]
         },
         {
           "name": "constant.numeric.line-number.bbcbasic.baron",
           "match": "^\\s*\\d+"
         },
         {
-          "name": "string.quoted.double.bbcbasic.baron",
           "begin": "\"",
-          "end": "\"(?!\")",
+          "end": "\"(?!\")|$|(?=^\\s*(?:\\d|(?i:endbasic)\\b))",
+          "beginCaptures": {
+            "0": {
+              "name": "string.quoted.double.bbcbasic.baron"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "string.quoted.double.bbcbasic.baron"
+            }
+          },
           "patterns": [
+            {
+              "include": "#basic-splice"
+            },
             {
               "name": "constant.character.escape.baron",
               "match": "\"\""
+            },
+            {
+              "name": "string.quoted.double.bbcbasic.baron",
+              "match": "[^\"]+?(?=\\{(?=[ \\t]*$)|\"|$)"
             }
           ]
         },
         {
-          "match": "(REM)(.*)$",
-          "captures": {
+          "begin": "(REM)",
+          "end": "$|(?=^\\s*(?:\\d|(?i:endbasic)\\b))",
+          "beginCaptures": {
             "1": {
               "name": "keyword.control.bbcbasic.baron"
-            },
-            "2": {
-              "name": "comment.line.rem.bbcbasic.baron"
             }
-          }
+          },
+          "patterns": [
+            {
+              "include": "#basic-splice"
+            },
+            {
+              "name": "comment.line.rem.bbcbasic.baron",
+              "match": ".+?(?=\\{(?=[ \\t]*$)|$)"
+            }
+          ]
         },
         {
-          "match": "(DATA|D(?:AT|A)?\\.)(.*)$",
-          "captures": {
+          "begin": "(DATA|D(?:AT|A)?\\.)",
+          "end": "$|(?=^\\s*(?:\\d|(?i:endbasic)\\b))",
+          "beginCaptures": {
             "1": {
               "name": "keyword.control.bbcbasic.baron"
-            },
-            "2": {
-              "name": "string.unquoted.data.bbcbasic.baron"
             }
-          }
+          },
+          "patterns": [
+            {
+              "include": "#basic-splice"
+            },
+            {
+              "name": "string.unquoted.data.bbcbasic.baron",
+              "match": ".+?(?=\\{(?=[ \\t]*$)|$)"
+            }
+          ]
         },
         {
           "match": "(PROC|PRO\\.|FN)([A-Za-z0-9_`]*)",
@@ -371,6 +424,41 @@
         {
           "name": "keyword.operator.bbcbasic.baron",
           "match": "<=|>=|<>|<<|>>|[-+*/^=<>?!$;]"
+        }
+      ]
+    },
+    "basic-splice": {
+      "name": "meta.embedded.splice.baron",
+      "begin": "\\{(?=[ \\t]*$)",
+      "end": "\\}|(?=^\\s*(?:\\d|(?i:endbasic)\\b))",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.begin.baron"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.end.baron"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#braces"
+        },
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    "braces": {
+      "begin": "\\{",
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#braces"
+        },
+        {
+          "include": "$self"
         }
       ]
     }

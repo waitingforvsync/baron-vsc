@@ -17,6 +17,11 @@ the conditional-flag veto applies (`COUNT` is a keyword, `COUNTER` a variable), 
 abbreviations resolve to the right keyword, `PROC`/`FN` names, `*` commands, `REM`/`DATA`
 raw tails, uppercase-only `&` hex, and line numbers.
 
+A BASIC line ending in `{` splices Baron statements into the line, up to the `}`. The
+splice is highlighted (and parsed) as ordinary Baron, so its labels, mnemonics and
+references work like any others. The line then carries on after the `}` as it left off:
+still inside a string, or still in a `REM`.
+
 ### CMOS-aware opcode colouring ###
 The parser tracks `SECTION` nesting and evaluates each section's own `cmos` attribute
 (not inherited by nested sections, exactly as baron does). 65C02-only instructions — the extra mnemonics,
@@ -25,8 +30,9 @@ and the CMOS-only addressing modes such as `LDA (zp)`, `BIT #`, `BIT zp,X`, `INC
 **invalid** (red) in plain NMOS context, via semantic tokens.
 
 ### Macro and function call colouring ###
-A macro invocation or `FUNCTION` call is coloured like the macro or function name in its
-definition, but only when baron would accept the call where it stands: the macro or
+A macro invocation is coloured like a directive keyword (`IF`, `EQUB`, `ALIGN`), since it
+stands where one would, and a `FUNCTION` call like the function name in its definition.
+Each is coloured only when baron would accept the call where it stands: the macro or
 function is defined *earlier* (both are define-before-use), and one of its overloads fits
 the call — the macro signature's parameters, commas and quoted literal tokens, matched
 the way baron matches them, or the function's argument count. A misspelt, misordered or

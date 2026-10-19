@@ -7,7 +7,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { defineSwitches, shellQuote } from './core/defines';
-import { docFile, Project } from './project';
+import { docFile, isSourceDoc, Project } from './project';
 
 const DIAG_RE = /^(.+?):(\d+):(\d+):\s+(error|warning):\s+(.*)$/;
 
@@ -105,7 +105,7 @@ export class BaronBuild {
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         // Always remove first: writing through a stale hardlink would edit the ORIGINAL.
         fs.rmSync(dest, { force: true });
-        const doc = vscode.workspace.textDocuments.find((d) => docFile(d) === file);
+        const doc = vscode.workspace.textDocuments.find((d) => isSourceDoc(d) && docFile(d) === file);
         if (doc) {
           // Write the buffer back in the document's OWN encoding. A plain string write
           // is always UTF-8, which silently re-encoded Latin-1/Windows-1252 sources: a
@@ -159,7 +159,7 @@ export class BaronBuild {
     const gen = ++this.generation;
     let cwd = wsRoot;
     const involved = this.project.filesForRoots(sources.map((s) => path.resolve(wsRoot, s)));
-    const anyDirty = vscode.workspace.textDocuments.some((d) => d.isDirty && involved.has(docFile(d)));
+    const anyDirty = vscode.workspace.textDocuments.some((d) => d.isDirty && isSourceDoc(d) && involved.has(docFile(d)));
     if (anyDirty) {
       cwd = (await this.prepareMirror(wsRoot, involved)) ?? wsRoot;
       if (gen !== this.generation) {

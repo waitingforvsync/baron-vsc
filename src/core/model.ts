@@ -38,6 +38,8 @@ export interface Definition {
   macroSlots?: MacroSlot[];
   /** For functions: the parameter count (overloads are by arity). */
   arity?: number;
+  /** For sections: whether the 65C02 set is on, which a reopening carries on with. */
+  cmos?: boolean;
 }
 
 /** One slot of a macro signature (assemble.c handle_macro): a parameter takes an
@@ -101,6 +103,7 @@ export type Expr =
 export interface Reference {
   parts: { name: string; loc: Loc }[];
   scope: Scope;
+  /** A 'section' is the name on a SECTION line reopening a virtual section. */
   kind: 'value' | 'macrocall' | 'funccall' | 'section';
   /** For macro and function calls: the overload the call matches where it stands -
    *  defined earlier in the unit (both are define-before-use) and fitting the call's

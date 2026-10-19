@@ -1,5 +1,42 @@
 # Changelog #
 
+## 0.5.4 (2026-10-12) ##
+
+- Files changed on disk outside VS Code (by a build script, git or an agent) are now
+  picked up. Go to definition, hover, the outline and the colouring used to go on using a
+  file's old text until something was edited in VS Code, and a new file wasn't seen even
+  when an existing one INCLUDEd it. Such a change now reparses the files and reruns the
+  check, unless `baron.check` is `off`.
+- The extension no longer reads a file's last committed version in place of the file
+  itself. The git extension keeps copies of the committed versions for diffs and the
+  gutter change markers, and the extension could parse one of those instead, so it saw
+  last commit's INCLUDEs and macros. The background check could pick up the same stale
+  copy. The language features now ignore the committed side of a diff view as well.
+- A macro invocation is now coloured like a directive keyword, the colour of `IF` or
+  `EQUB`, rather than like the macro's name in its definition. That was the colour of
+  labels and function names too, so a macro call looked like a label. A macro call still
+  stays plain when baron wouldn't accept it.
+
+## 0.5.3 (2026-10-11) ##
+
+Version aligned with baron 0.5.3.0 (there was no 0.5.0, 0.5.1 or 0.5.2 plugin release).
+
+- BASIC line splices (baron issue #12): a `{` ending a line inside `BASIC` ... `ENDBASIC`
+  drops into Baron until its `}`, and the line carries on after it. The splice is
+  highlighted as Baron and parsed in the current scope, so its labels show in the outline
+  under the BASIC block, and go to definition, hover and the CMOS and call colouring all
+  work inside it. The BASIC text after the `}` keeps its state: a string or a `REM`,
+  `DATA` or `*` tail continues through the splice. A splice left open stops at the next
+  numbered line or `ENDBASIC`, where baron reports it, so the rest of the file stays
+  coloured correctly while you type.
+- A BASIC string now ends at the end of its line, as in BBC BASIC. An unterminated one
+  used to run on into the next line.
+- `AS_STRING(n)` and `AS_NUMBER(s)`, baron's new number-to-text and text-to-number
+  builtins, are highlighted, completed and parsed as builtins.
+- The `virtual` section attribute is highlighted and completed. Naming a virtual section
+  again reopens it: the second `SECTION` line now goes to the first one's definition,
+  and its code keeps that section's `cmos` setting, as baron does.
+
 ## 0.4.3 (2026-10-02) ##
 
 - New `baron.defines` setting: default `-D` symbol definitions passed to every build and
