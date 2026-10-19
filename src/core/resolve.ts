@@ -1,6 +1,6 @@
 // Pure reference resolution over the parsed model - shared by the providers and the tests.
 
-import { Definition, FileIndex, LocalLabelRef, Reference, Unit } from './model';
+import { Definition, FileIndex, Loc, LocalLabelRef, Reference, Scope, Unit } from './model';
 
 export type Found =
   | { type: 'def'; def: Definition }
@@ -35,6 +35,21 @@ export function findAt(index: FileIndex, offset: number): Found | undefined {
   return undefined;
 }
 
+/** The head of a reference: a parent-chain lookup, skipping a FUNCTION frame's locals not yet
+ *  bound where the reference stands (baron then looks in the definition scope). */
+function lookupVisible(scope: Scope, nameLower: string, at: Loc): Definition[] | undefined {
+  for (let s: Scope | undefined = scope; s; s = s.parent) {
+    let found = s.symbols.get(nameLower);
+    if (found && s.frame) {
+      found = found.filter((d) => d.boundAt === undefined || d.loc.file !== at.file || d.boundAt <= at.start);
+    }
+    if (found && found.length) {
+      return found;
+    }
+  }
+  return undefined;
+}
+
 /** Resolve a dotted reference up to (and including) partIndex, per scopes.c: the head is
  *  a parent-chain lookup, subsequent parts descend named scopes. */
 export function resolveRef(unit: Unit, ref: Reference, partIndex: number): Definition[] {
@@ -53,8 +68,15 @@ export function resolveRef(unit: Unit, ref: Reference, partIndex: number): Defin
   if (ref.kind === 'section') {
     return unit.sections.get(headLower) ?? [];
   }
+  // A transform runs once everything is defined, so any FUNCTION of the name will do; baron
+  // calls it with the section's bytes, so an overload taking one argument first.
+  if (ref.kind === 'transform') {
+    const all = unit.functions.get(headLower) ?? [];
+    const one = all.filter((d) => d.arity === 1);
+    return one.length ? one : all;
+  }
 
-  let defs: Definition[] | undefined = ref.scope.lookupChain(headLower);
+  let defs: Definition[] | undefined = lookupVisible(ref.scope, headLower, ref.parts[0].loc);
   if (!defs || defs.length === 0) {
     defs = unit.sections.get(headLower);
   }

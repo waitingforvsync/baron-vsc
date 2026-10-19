@@ -1,5 +1,25 @@
 # Changelog #
 
+## 0.6.0 (2026-10-19) ##
+
+Version aligned with baron 0.6.0.0.
+
+- Section transforms: the `transform` attribute is highlighted and completed, and the name
+  in `transform = "name"` goes to the `FUNCTION` that makes the section's bytes, with hover
+  and find references too. The function can be defined anywhere in the program, since baron
+  runs the transform once everything is defined, and an overload taking one argument comes
+  first, since baron passes it the section's bytes alone.
+- `BITLEN`, `BITPACK` and `LZ_PARSE`, baron's bit-packing and compression builtins, are
+  highlighted, completed and parsed as builtins.
+- Sections own their bytes (baron issue #17), so more of them can be reopened by naming
+  them again: any top-level section, a virtual section inside a real one, and a section
+  with its own `org` inside a virtual one. The second `SECTION` line goes to the first
+  one's definition, as a reopened virtual section's already did.
+- A `FUNCTION`'s locals count only from their assignment on, as baron now runs a body: a
+  name read before a local of the same name is assigned goes to the outer definition.
+- baron's new level-3 warning, a branch whose target is on another page, reaches the
+  Problems panel with `--warn 3` in `baron.buildArgs`, which the background check uses too.
+
 ## 0.5.4 (2026-10-12) ##
 
 - Files changed on disk outside VS Code (by a build script, git or an agent) are now

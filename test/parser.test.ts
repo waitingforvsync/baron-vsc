@@ -804,3 +804,67 @@ test('shell quoting for ${defines} in buildOverride', () => {
   assert.equal(shellQuote('TITLE="it\'s"', 'linux'), `'TITLE="it'\\''s"'`);
   assert.equal(shellQuote('TITLE="A B"', 'win32'), '"TITLE=\\"A B\\""');
 });
+
+// ---- 0.6.0: baron 0.6.0.0 ----
+
+test('BITLEN, BITPACK and LZ_PARSE are builtins, not calls to user functions', () => {
+  const unit = parse('t = {1}\nx = BITLEN(5) + LEN(BITPACK(t))\ny = LZ_PARSE(t, t, t, t, t, {t, t}, {t, t})\n');
+  const index = unit.files.get('main.6502')!;
+  assert.ok(!index.refs.some((r) => r.kind === 'funccall'));
+  assert.ok(index.refs.filter((r) => r.parts[0].name === 't').every((r) => resolveRef(unit, r, 0).length === 1));
+});
+
+test('transform = "name" refers to the FUNCTION, wherever it is defined', () => {
+  const src = [
+    'SECTION screen, org = &5800, transform = "pack"',
+    'EQUB 1, 2, 3',
+    'ENDSECTION',
+    'FUNCTION pack(data, extra) = data',
+    'FUNCTION pack(data) = data',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  const ref = index.refs.find((r) => r.kind === 'transform')!;
+  // The name inside the quotes, and the one-argument overload: baron passes the bytes alone.
+  assert.equal(src.slice(ref.parts[0].loc.start, ref.parts[0].loc.end), 'pack');
+  const defs = resolveRef(unit, ref, 0);
+  assert.deepEqual(defs.map((d) => d.arity), [1]);
+});
+
+test('sections: any top-level section can be reopened (baron issue #17)', () => {
+  const src = 'SECTION code, org = &2000\nRTS\nENDSECTION\nSECTION code\nRTS\nENDSECTION\n';
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  assert.equal(unit.sections.get('code')!.length, 1);
+  const reopen = index.refs.find((r) => r.kind === 'section')!;
+  assert.deepEqual(resolveRef(unit, reopen, 0), unit.sections.get('code'));
+});
+
+test('a FUNCTION local counts only once bound; before that the name is the outer one', () => {
+  const src = [
+    'g = 1',
+    'FUNCTION f(x)',
+    '    y = g + y',
+    '    g = x',
+    '= y + g',
+    '',
+  ].join('\n');
+  const unit = parse(src);
+  const index = unit.files.get('main.6502')!;
+  const at = (name: string, line: number) => {
+    const lineStart = src.split('\n').slice(0, line).join('\n').length + (line ? 1 : 0);
+    return index.refs.find((r) => r.parts[0].name === name && r.parts[0].loc.start > lineStart
+      && r.parts[0].loc.start < lineStart + src.split('\n')[line].length)!;
+  };
+  const where = (r: ReturnType<typeof at>) => resolveRef(unit, r, 0).map((d) => d.loc.start);
+  const globalG = index.defs.find((d) => d.name === 'g')!.loc.start;
+  const localG = index.defs.filter((d) => d.name === 'g')[1].loc.start;
+  // Read before `g = x` runs: the global. A local's own assignment reads the outer name too,
+  // so `y` on the right of `y = ...` has nothing to find.
+  assert.deepEqual(where(at('g', 2)), [globalG]);
+  assert.deepEqual(where(at('y', 2)), []);
+  // In the return, both locals are bound.
+  assert.deepEqual(where(at('g', 4)), [localG]);
+  assert.equal(where(at('y', 4)).length, 1);
+});

@@ -40,6 +40,9 @@ export interface Definition {
   arity?: number;
   /** For sections: whether the 65C02 set is on, which a reopening carries on with. */
   cmos?: boolean;
+  /** For a FUNCTION's local: where it becomes readable - the end of its assignment. baron
+   *  runs a body top down, so before that the name means whatever the definition scope has. */
+  boundAt?: number;
 }
 
 /** One slot of a macro signature (assemble.c handle_macro): a parameter takes an
@@ -57,6 +60,8 @@ export class Scope {
   symbols = new Map<string, Definition[]>();
   /** Anonymous .@ labels bound in this scope, in source order per file. */
   localLabels: Definition[] = [];
+  /** A FUNCTION's frame: its parameters, and locals readable only once bound (boundAt). */
+  frame = false;
 
   constructor(parent?: Scope) {
     this.parent = parent;
@@ -103,8 +108,9 @@ export type Expr =
 export interface Reference {
   parts: { name: string; loc: Loc }[];
   scope: Scope;
-  /** A 'section' is the name on a SECTION line reopening a virtual section. */
-  kind: 'value' | 'macrocall' | 'funccall' | 'section';
+  /** A 'section' is the name on a SECTION line reopening a section; a 'transform' is the
+   *  FUNCTION a section's transform attribute names, inside its quotes. */
+  kind: 'value' | 'macrocall' | 'funccall' | 'section' | 'transform';
   /** For macro and function calls: the overload the call matches where it stands -
    *  defined earlier in the unit (both are define-before-use) and fitting the call's
    *  shape (macro signature / function arity). Unset when baron would reject the call. */

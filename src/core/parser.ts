@@ -390,7 +390,11 @@ class FileParser {
     this.skipToStatementEnd();
     const rhsEnd = this.lx.getPos();
     def.detail = '= ' + this.index.text.slice(rhsStart, Math.min(rhsEnd, rhsStart + 60)).trim();
-    // In a function body an assignment is a local; elsewhere it's an ordinary symbol.
+    // In a function body an assignment is a local, readable from the end of its statement on;
+    // elsewhere it's an ordinary symbol.
+    if (this.scope.frame) {
+      def.boundAt = rhsEnd;
+    }
     this.outlineAdd({
       name: tok.text, kind: 'symbol', loc: def.loc, fullLoc: def.loc,
       detail: def.detail, children: [],
@@ -654,8 +658,10 @@ class FileParser {
       return;
     }
     this.next();
-    // Naming a section again reopens it (baron allows that only for a virtual one): a use of
-    // the first SECTION line, whose attributes still hold.
+    // Naming a section again reopens it: a use of the first SECTION line, whose attributes still
+    // hold. baron allows that for a closed section whose close left its parent untouched - a
+    // top-level one, a virtual one inside a real one, one with its own org inside a virtual one -
+    // and reports any other, so it needs no checking here.
     const reopened = this.up.unit.sections.get(name.lower)?.[0];
     let def: Definition | undefined;
     if (reopened) {
@@ -680,8 +686,12 @@ class FileParser {
         break;
       }
       this.next();
+      const valueTok = this.peek();
       const expr = this.parseExpr();
       attrs.push(key.lower);
+      if (key.lower === 'transform' && expr?.t === 'str') {
+        this.recordTransformRef(valueTok);
+      }
       if (key.lower === 'cmos') {
         cmosSeen = true;
         const v = evalCmos(expr);
@@ -819,6 +829,7 @@ class FileParser {
     this.up.addGlobal(this.up.unit.functions, def);
 
     const child = new Scope(this.scope);
+    child.frame = true;
     const params: string[] = [];
     if (this.isPunct(this.peek(), '(')) {
       this.next();
@@ -1445,6 +1456,21 @@ class FileParser {
   }
 
   // ---- references ----
+
+  /** transform = "name" names the FUNCTION that makes the section's bytes: a reference to it,
+   *  over the name inside the quotes (when the string spells it plainly, with no "" pairs). */
+  private recordTransformRef(tok: Token): void {
+    const name = tok.str;
+    if (tok.kind !== TokKind.String || !name || this.index.text.slice(tok.start + 1, tok.end - 1) !== name) {
+      return;
+    }
+    const start = tok.start + 1;
+    this.index.refs.push({
+      parts: [{ name, loc: { file: this.index.file, start, end: start + name.length } }],
+      scope: this.scope,
+      kind: 'transform',
+    });
+  }
 
   private recordIdentRef(tok: Token, kind: Reference['kind']): Reference {
     const parts: Reference['parts'] = [];

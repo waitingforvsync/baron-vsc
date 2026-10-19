@@ -198,7 +198,7 @@
     },
     "builtin-functions": {
       "name": "support.function.baron",
-      "match": "(?i)\\b(lo|hi|abs|int|floor|round|trunc|ceil|sqrt|sin|cos|tan|asin|acos|atan|log|ln|exp|not|rnd|len|shape|rank|full|repeated|flatten|concat|zip|reverse|sort|sum|product|min|max|defined|codes|chr|find|is_string|is_number|error|as_string|as_number)\\s*(?=\\()"
+      "match": "(?i)\\b(lo|hi|abs|int|floor|round|trunc|ceil|sqrt|sin|cos|tan|asin|acos|atan|log|ln|exp|not|rnd|len|shape|rank|full|repeated|flatten|concat|zip|reverse|sort|sum|product|min|max|defined|codes|chr|find|is_string|is_number|error|as_string|as_number|bitlen|bitpack|lz_parse)\\s*(?=\\()"
     },
     "constants": {
       "patterns": [
@@ -213,7 +213,7 @@
       ]
     },
     "section-attrs": {
-      "match": "(?i)\\b(org|load|exec|filename|cmos|guard|virtual)\\s*(?==[^=])",
+      "match": "(?i)\\b(org|load|exec|filename|cmos|guard|virtual|transform)\\s*(?==[^=])",
       "name": "variable.parameter.attribute.baron"
     },
     "assignment": {

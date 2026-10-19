@@ -52,10 +52,11 @@ export const BUILTIN_FUNCTIONS = new Set([
   'len', 'shape', 'rank', 'full', 'repeated', 'flatten', 'concat', 'zip', 'reverse',
   'sort', 'sum', 'product', 'min', 'max', 'defined',
   'codes', 'chr', 'find', 'is_string', 'is_number', 'error', 'as_string', 'as_number',
+  'bitlen', 'bitpack', 'lz_parse',
 ]);
 
 /** Attributes baron acts on in a SECTION statement. */
-export const SECTION_ATTRIBUTES = ['org', 'filename', 'load', 'exec', 'cmos', 'guard', 'virtual'];
+export const SECTION_ATTRIBUTES = ['org', 'filename', 'load', 'exec', 'cmos', 'guard', 'virtual', 'transform'];
 
 export function isStatementKeyword(lower: string): boolean {
   return DIRECTIVES.has(lower) || CLOSERS.has(lower) || MNEMONICS.has(lower)

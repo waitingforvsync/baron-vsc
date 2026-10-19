@@ -644,3 +644,34 @@ them is still read fresh only when something else marks the units dirty. Typeche
 0.5.3 had already gone to the marketplace (2026-10-11 20:46, after the AS_STRING rename),
 so the macro-call colour and the two stale-unit fixes ship as 0.5.4, at Rich's request.
 The extension is now ahead of baron's 0.5.3.0.
+
+### 0.6.0: baron 0.6.0.0 (2026-10-19) ###
+Rich asked for the extension to catch up with baron and take its version. First, the
+released-but-uncommitted 0.5.3 and 0.5.4 work was committed (c498586) at his request: both
+had gone to the marketplace from a dirty tree.
+
+What baron changed since 0.5.4 that the extension sees:
+- Section transforms (`transform = "name"`) and the builtins `BITLEN(`, `BITPACK(` and
+  `LZ_PARSE(`: data.ts (BUILTIN_FUNCTIONS, SECTION_ATTRIBUTES) and the grammar's two
+  hand-written rules. The transform's string is now a reference of a new kind, `transform`,
+  over the name inside the quotes (parser recordTransformRef; only when the string spells
+  it with no `""` pairs). resolveRef answers it from unit.functions with no define-before-use
+  (baron runs transforms on the output pass, everything defined) and prefers arity-1
+  overloads (baron calls it with the bytes alone). It is not coloured: the string stays a
+  string.
+- Sections own their bytes (baron #17): reopening is allowed for any closed section whose
+  close left its parent untouched (top-level, virtual-in-real, own-org-in-virtual). The
+  parser already treated every repeated SECTION name as a reopen and baron reports the
+  illegal ones, so only the comment changed.
+- Lightweight call frames: baron now keeps a FUNCTION's params and locals in a frame
+  scanned at run time, so a local is readable only once its assignment has run - before
+  that the name falls through to the definition scope. Scope gained `frame`, set on a
+  FUNCTION's scope, and Definition `boundAt` (the end of the local's assignment statement);
+  resolveRef's head lookup (lookupVisible) skips a frame's definitions bound after the
+  reference. `y = y + 1` reads the outer `y`, as baron does.
+- The page-crossing warning is baron's level 3, opt-in: no setting needed, since the
+  background check passes `baron.buildArgs` and `--warn 3` there brings it in. README says so.
+
+Not mirrored: LZ_PARSE's new argument forms (a list of offset tables, the repeat pair) and
+dead IF arms no longer evaluating are runtime matters with no syntax. 48/48 tests (4 new),
+typecheck clean. Bumped to 0.6.0 with `npm version` (package-lock follows).

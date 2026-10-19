@@ -50,7 +50,8 @@ expressions including multi-line lists, ranges and subscripts. On top of it:
 - **Go to definition** (F12) — works on dotted paths (`wipe.nonzero`), macro
   invocations and function calls (straight to the overload the call matches; macros
   and functions are their own namespaces, so a label sharing a macro's name never gets
-  in the way), `@-`/`@+`, and `INCLUDE`/`INCBIN` file names.
+  in the way), `@-`/`@+`, `INCLUDE`/`INCBIN` file names, and the function a section's
+  `transform = "name"` names.
 - **Find all references** (Shift+F12).
 - **Hover** — the defining line, its scope, doc comments above it, and the evaluated
   value of constant symbols (decimal and hex).
@@ -61,7 +62,9 @@ expressions including multi-line lists, ranges and subscripts. On top of it:
 
 Scoping follows baron precisely: labels bind in the enclosing scope, a label immediately
 before `{` names the scope (one separator allowed between), anonymous scopes are private,
-`IF` does not scope, `FOR` bodies and macro/function bodies do.
+`IF` does not scope, `FOR` bodies and macro/function bodies do. A function's locals count
+only from their assignment on, since baron runs a body top down: before that, a name means
+whatever the definition scope has.
 
 ### Checking and building ###
 - **Live checking** (`baron.check`, default `onType`) — `baron --check` runs in the
@@ -72,7 +75,9 @@ before `{` names the scope (one separator allowed between), anonymous scopes are
   land in the Problems panel as red squiggles. Checks are asynchronous and a newer one
   kills and supersedes an in-flight one, so slow assemblies never block the editor.
   Set `baron.check` to `onSave` or `off` to dial it back; **Baron: Check** runs one
-  manually. Requires a baron built with `--check` support.
+  manually. Requires a baron built with `--check` support. The check uses
+  `baron.buildArgs`, so `--warn 2` or `--warn 3` there brings in baron's opt-in warnings
+  (level 3 flags branches that cross a page).
 - **Baron: Assemble** (`F7`) — runs baron on the configured root files with the
   configured switches. Errors and warnings land in the Problems panel and the *Baron*
   output channel.
